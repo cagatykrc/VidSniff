@@ -8,8 +8,7 @@ Browser video sniffer + local MP4 downloader. A tray app and browser extension t
 
 Tarayıcıdan video yakalayan, yerel olarak MP4 indiren araç. Tepsi uygulaması ve eklenti ile HLS/medya akışlarını yakalayıp MP4 olarak kaydeder.
 
-![Download panel](docs/screenshots/panel.svg)
-![Floating overlay](docs/screenshots/overlay.svg)
+![Download panel](docs/screenshots/panel.png)
 
 ---
 
@@ -24,8 +23,8 @@ Tarayıcıdan video yakalayan, yerel olarak MP4 indiren araç. Tepsi uygulaması
 | Settings: language (EN/TR) + start with Windows | Ayarlar: dil (EN/TR) + Windows ile başlat |
 | Chrome / Edge / Brave (+ Firefox temporary) | Chrome / Edge / Brave (+ Firefox geçici) |
 
-![Extension setup](docs/screenshots/extension-setup.svg)
-![Settings](docs/screenshots/settings.svg)
+![Extension setup](docs/screenshots/extension-setup.png)
+![Settings](docs/screenshots/settings.png)
 
 ---
 
