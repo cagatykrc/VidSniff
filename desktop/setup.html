@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Eklenti Kurulum Asistanı</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --text: #eef1f6;
+      --muted: #9aa3b5;
+      --line: #2a3140;
+      --font: "Segoe UI", Candara, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 13px/1.45 var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(800px 320px at -10% -20%, #2a1a12, transparent 55%),
+        var(--bg);
+      padding: 18px 18px 24px;
+    }
+    h1 { margin: 0 0 4px; font-size: 18px; }
+    .lead { color: var(--muted); margin: 0 0 14px; }
+    .steps { display: grid; gap: 10px; }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #171b24;
+      padding: 12px 14px;
+    }
+    .step .n {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border-radius: 7px;
+      background: #ff6a1a;
+      color: #fff;
+      font: 700 12px/22px var(--font);
+      text-align: center;
+      margin-right: 8px;
+    }
+    .step h2 { display: inline; margin: 0; font-size: 14px; }
+    .step p { margin: 8px 0 0; color: var(--muted); }
+    .path {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0f1218;
+      border: 1px solid var(--line);
+      font: 11px/1.4 ui-monospace, Consolas, monospace;
+      color: #fdba74;
+      word-break: break-all;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #1a1e27;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #ff7a2f, #e85d04);
+      border-color: #c2410c;
+      color: #fff;
+      font-weight: 700;
+    }
+    .hint { margin-top: 8px; font-size: 12px; color: #34d399; min-height: 1.2em; }
+    .alt {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .foot {
+      margin-top: 16px;
+      display: flex;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <h1>Eklenti kurulum asistanı</h1>
+  <p class="lead">VidSniff servisi çalışıyor. Tarayıcıya eklentiyi bir kez eklemen yeterli.</p>
+
+  <div class="steps">
+    <section class="step">
+      <span class="n">1</span><h2>Eklenti klasörü</h2>
+      <p>Bu klasörü “Paketlenmemiş öğe yükle” ile seçeceksin.</p>
+      <div class="path" id="chromePath">…</div>
+      <div class="row">
+        <button class="primary" id="openFolder" type="button">Klasörü aç</button>
+        <button id="copyPath" type="button">Yolu kopyala</button>
+      </div>
+    </section>
+
+    <section class="step">
+      <span class="n">2</span><h2>Tarayıcıda yükle</h2>
+      <p>Geliştirici modu → <b>Paketlenmemiş öğe yükle</b> → 1. adımdaki klasör.</p>
+      <div class="row">
+        <button class="primary" id="guideChrome" type="button">Chrome için kur</button>
+        <button class="primary" id="guideEdge" type="button">Edge için kur</button>
+        <button id="openBrave" type="button">Brave</button>
+      </div>
+      <div class="hint" id="hint"></div>
+    </section>
+  </div>
+
+  <div class="alt">
+    <b>Firefox / Zen:</b> kalıcı kurulum sınırlı.
+    <code>about:debugging</code> → Load Temporary Add-on →
+    <span id="ffManifest">manifest.json</span>
+    <div class="row">
+      <button id="openFf" type="button">Firefox eklenti klasörü</button>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button id="closeSetup" type="button">Tamam</button>
+  </div>
+
+  <script>
+    const hint = document.getElementById("hint");
+    function flash(t) { hint.textContent = t; }
+
+    window.vidsniffSetup.getPaths().then((p) => {
+      document.getElementById("chromePath").textContent = p.chromeExt;
+      document.getElementById("ffManifest").textContent = p.firefoxExt + "\\manifest.json";
+    });
+
+    document.getElementById("openFolder").onclick = async () => {
+      await window.vidsniffSetup.openChromeExt();
+      flash("Klasör açıldı — bunu tarayıcıda seç.");
+    };
+    document.getElementById("copyPath").onclick = async () => {
+      const p = await window.vidsniffSetup.getPaths();
+      await navigator.clipboard.writeText(p.chromeExt);
+      flash("Yol panoya kopyalandı.");
+    };
+    document.getElementById("guideChrome").onclick = async () => {
+      const r = await window.vidsniffSetup.runGuide("chrome");
+      flash(r?.ok ? "Chrome eklenti sayfası açıldı. Geliştirici modu → Paketlenmemiş yükle." : (r?.error || "Chrome bulunamadı."));
+    };
+    document.getElementById("guideEdge").onclick = async () => {
+      const r = await window.vidsniffSetup.runGuide("edge");
+      flash(r?.ok ? "Edge eklenti sayfası açıldı. Geliştirici modu → Paketlenmemiş yükle." : (r?.error || "Edge bulunamadı."));
+    };
+    document.getElementById("openBrave").onclick = async () => {
+      await window.vidsniffSetup.openChromeExt();
+      const r = await window.vidsniffSetup.openBrowserExtensions("brave");
+      flash(r?.ok ? "Brave eklenti sayfası açıldı." : (r?.error || "Brave bulunamadı."));
+    };
+    document.getElementById("openFf").onclick = () => window.vidsniffSetup.openFirefoxExt();
+    document.getElementById("closeSetup").onclick = () => window.vidsniffSetup.close();
+  </script>
+</body>
+</html>

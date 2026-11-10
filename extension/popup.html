@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VidSniff</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>VidSniff</h1>
+        <p class="sub">Bu videoyu indir</p>
+      </div>
+    </div>
+    <div id="status" class="status offline">servis kapalı</div>
+  </header>
+
+  <section id="jobs" class="jobs" hidden></section>
+
+  <main class="now">
+    <article id="primary" class="primary empty">
+      <div class="p-kicker">Şu anki video</div>
+      <div class="p-title">Video oynatınca burada görünür</div>
+      <div class="p-meta">IDM gibi: isim + MP4</div>
+      <div class="p-actions">
+        <button id="dlPrimary" class="primary-btn" type="button" disabled>MP4 İndir</button>
+      </div>
+      <div id="primaryMsg" class="msg" hidden></div>
+    </article>
+
+    <details class="more">
+      <summary>Tüm yakalananlar</summary>
+      <div id="list" class="list"></div>
+    </details>
+  </main>
+
+  <footer class="foot">
+    <span>Oynatıcıdaki turuncu <b>⬇ Bu videoyu indir</b> paneli de aynı işi yapar</span>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

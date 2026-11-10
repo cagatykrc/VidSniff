@@ -1,0 +1,68 @@
+{
+  "name": "vidsniff",
+  "version": "1.7.0",
+  "description": "Browser video sniffer + local MP4 downloader (tray app + extension)",
+  "author": "Bestami",
+  "license": "MIT",
+  "type": "module",
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "node downloader/server.js",
+    "app": "electron .",
+    "pack:ext": "node scripts/pack-extension.js",
+    "icons": "node scripts/make-icons.js",
+    "dist": "npm run pack:ext && electron-builder --win nsis",
+    "dist:portable": "npm run pack:ext && electron-builder --win portable"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bestami/vidsniff"
+  },
+  "keywords": [
+    "video-downloader",
+    "hls",
+    "mp4",
+    "browser-extension",
+    "electron",
+    "idm"
+  ],
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.vidsniff.app",
+    "productName": "VidSniff",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "downloader/**/*",
+      "extension/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "extension/icons/icon256.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VidSniff",
+      "runAfterFinish": true,
+      "artifactName": "VidSniff-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "VidSniff-Portable-${version}.exe"
+    }
+  }
+}

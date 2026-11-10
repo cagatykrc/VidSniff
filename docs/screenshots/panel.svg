@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <radialGradient id="g" cx="0" cy="0" r="1">
+      <stop offset="0%" stop-color="#2a1a12"/>
+      <stop offset="55%" stop-color="#12141a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="btn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff7a2f"/>
+      <stop offset="100%" stop-color="#e85d04"/>
+    </linearGradient>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff8a3d"/>
+      <stop offset="100%" stop-color="#9a3412"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="#0b0d12"/>
+  <rect x="340" y="60" width="600" height="600" rx="16" fill="#12141a" stroke="#2a3140"/>
+  <ellipse cx="340" cy="60" rx="280" ry="140" fill="url(#g)"/>
+  <rect x="340" y="60" width="600" height="72" fill="#12141a"/>
+  <line x1="340" y1="132" x2="940" y2="132" stroke="#2a3140"/>
+  <rect x="364" y="82" width="36" height="36" rx="9" fill="url(#logo)"/>
+  <polygon points="377,92 377,108 391,100" fill="#fff"/>
+  <text x="412" y="98" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="18" font-weight="700">VidSniff</text>
+  <text x="412" y="116" fill="#9aa3b5" font-family="Segoe UI, Arial" font-size="12">Download panel</text>
+  <rect x="760" y="88" width="64" height="28" rx="8" fill="transparent" stroke="#2a3140"/>
+  <text x="774" y="107" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="12">Folder</text>
+  <rect x="832" y="88" width="76" height="28" rx="8" fill="transparent" stroke="#2a3140"/>
+  <text x="848" y="107" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="12">Settings</text>
+  <rect x="340" y="132" width="600" height="44" fill="#151922"/>
+  <text x="364" y="159" fill="#9aa3b5" font-family="Segoe UI, Arial" font-size="12">Install the extension to catch videos</text>
+  <rect x="800" y="142" width="108" height="28" rx="8" fill="url(#btn)"/>
+  <text x="820" y="161" fill="#fff" font-family="Segoe UI, Arial" font-size="12" font-weight="700">Install ext.</text>
+  <rect x="364" y="198" width="552" height="96" rx="12" fill="#1a1e27" stroke="#2a3140"/>
+  <text x="384" y="228" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="14">The Dog Stars.mp4</text>
+  <rect x="820" y="212" width="72" height="22" rx="6" fill="#1f2a22" stroke="#34d399"/>
+  <text x="836" y="227" fill="#34d399" font-family="Segoe UI, Arial" font-size="11">running</text>
+  <rect x="384" y="244" width="512" height="8" rx="4" fill="#0f1218"/>
+  <rect x="384" y="244" width="318" height="8" rx="4" fill="#ff6b1a"/>
+  <text x="384" y="276" fill="#9aa3b5" font-family="Segoe UI, Arial" font-size="12">62% · auto</text>
+  <rect x="364" y="312" width="552" height="96" rx="12" fill="#1a1e27" stroke="#2a3140"/>
+  <text x="384" y="342" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="14">Good Lawyer.mp4</text>
+  <rect x="830" y="326" width="58" height="22" rx="6" fill="#1f2a22" stroke="#34d399"/>
+  <text x="844" y="341" fill="#34d399" font-family="Segoe UI, Arial" font-size="11">done</text>
+  <rect x="384" y="358" width="512" height="8" rx="4" fill="#0f1218"/>
+  <rect x="384" y="358" width="512" height="8" rx="4" fill="#ff6b1a"/>
+  <text x="384" y="390" fill="#9aa3b5" font-family="Segoe UI, Arial" font-size="12">100% · auto</text>
+  <rect x="820" y="374" width="64" height="24" rx="6" fill="#1a1e27" stroke="#2a3140"/>
+  <text x="834" y="390" fill="#eef1f6" font-family="Segoe UI, Arial" font-size="11">Show</text>
+  <text x="560" y="690" fill="#6b7280" font-family="Segoe UI, Arial" font-size="12">VidSniff  tray download panel</text>
+</svg>

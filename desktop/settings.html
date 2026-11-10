@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>VidSniff — Ayarlar</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --text: #eef1f6;
+      --muted: #9aa3b5;
+      --line: #2a3140;
+      --panel: #171b24;
+      --font: "Segoe UI", Candara, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 13px/1.45 var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(700px 280px at -10% -20%, #2a1a12, transparent 55%),
+        var(--bg);
+      padding: 18px;
+    }
+    h1 { margin: 0 0 4px; font-size: 17px; }
+    .lead { color: var(--muted); margin: 0 0 16px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .card h2 { margin: 0 0 8px; font-size: 13px; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    label.toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      cursor: pointer;
+      width: 100%;
+    }
+    .hint { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .path {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #0f1218;
+      border: 1px solid var(--line);
+      font: 11px/1.4 ui-monospace, Consolas, monospace;
+      color: #fdba74;
+      word-break: break-all;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #1a1e27;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #ff7a2f, #e85d04);
+      border-color: #c2410c;
+      color: #fff;
+      font-weight: 700;
+    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .foot {
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ayarlar</h1>
+  <p class="lead">Uygulama tercihleri</p>
+
+  <section class="card">
+    <h2>Başlangıç</h2>
+    <label class="toggle">
+      <input type="checkbox" id="autostart" />
+      <span>Windows açılınca VidSniff’i başlat</span>
+    </label>
+    <p class="hint">Kurulumdan sonra tepside sessizce çalışır; video indirme servisi hazır olur.</p>
+  </section>
+
+  <section class="card">
+    <h2>İndirmeler</h2>
+    <p class="hint">Dosyalar bu klasöre kaydedilir.</p>
+    <div class="path" id="downloadPath">…</div>
+    <div class="actions">
+      <button class="primary" id="openDownloads" type="button">Klasörü aç</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Eklenti</h2>
+    <p class="hint">Tarayıcı eklentisini kurmak veya yeniden yüklemek için asistanı aç.</p>
+    <div class="actions">
+      <button id="openExtSetup" type="button">Eklenti kurulum asistanı</button>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span id="version">VidSniff</span>
+    <button id="closeSettings" type="button">Kapat</button>
+  </div>
+
+  <script>
+    const api = window.vidsniffSetup;
+    api.getPaths().then((p) => {
+      document.getElementById("autostart").checked = !!p.openAtLogin;
+      document.getElementById("downloadPath").textContent = p.downloadDir || "";
+      if (p.version) document.getElementById("version").textContent = "VidSniff " + p.version;
+    });
+    document.getElementById("autostart").onchange = (e) => api.setAutostart(e.target.checked);
+    document.getElementById("openDownloads").onclick = () => api.openDownloads();
+    document.getElementById("openExtSetup").onclick = () => api.openGuide();
+    document.getElementById("closeSettings").onclick = () => api.closeSettings();
+  </script>
+</body>
+</html>
