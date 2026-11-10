@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "VidSniff — Video Download Manager",
-  "version": "1.6.2",
-  "description": "IDM tarzı: oynatıcıda video indirme paneli, MP4 olarak kaydet.",
+  "version": "1.7.0",
+  "description": "EN: Catch streams & save MP4. TR: Akışı yakala, MP4 olarak kaydet.",
   "permissions": [
     "webRequest",
     "downloads",
@@ -41,7 +41,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["i18n-global.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle",
       "all_frames": true

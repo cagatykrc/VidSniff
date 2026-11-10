@@ -18,7 +18,9 @@ import {
   stopDownloader,
   getDownloadDir,
   getJobs,
+  setPrefs,
 } from "../downloader/server.js";
+import { STRINGS, normalizeLang, t } from "./i18n.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -28,6 +30,7 @@ const STABLE_DIR = path.join(
   process.env.LOCALAPPDATA || app.getPath("userData"),
   "VidSniff"
 );
+const PREFS_PATH = path.join(STABLE_DIR, "prefs.json");
 
 let tray = null;
 let panel = null;
@@ -35,6 +38,32 @@ let setupWin = null;
 let settingsWin = null;
 let quitting = false;
 let extPaths = { chromeExt: "", firefoxExt: "" };
+/** @type {{ lang: string }} */
+let prefs = { lang: "tr" };
+
+async function loadPrefs() {
+  try {
+    const raw = JSON.parse(await fsp.readFile(PREFS_PATH, "utf8"));
+    if (raw?.lang) prefs.lang = normalizeLang(raw.lang);
+  } catch {
+    prefs.lang = normalizeLang(app.getLocale());
+  }
+}
+
+async function savePrefs() {
+  await fsp.mkdir(STABLE_DIR, { recursive: true });
+  await fsp.writeFile(PREFS_PATH, JSON.stringify(prefs, null, 2), "utf8");
+  setPrefs(prefs);
+  broadcastLang();
+}
+
+function broadcastLang() {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send("lang:changed", prefs.lang);
+  }
+  rebuildTrayMenu();
+  refreshTrayTitle();
+}
 
 async function ensureStableExtensions() {
   await fsp.mkdir(STABLE_DIR, { recursive: true });
@@ -46,10 +75,12 @@ async function ensureStableExtensions() {
     "background.js",
     "content.js",
     "content.css",
+    "i18n-global.js",
     "popup.html",
     "popup.js",
     "popup.css",
     "lib/media.js",
+    "lib/i18n.js",
     "icons/icon16.png",
     "icons/icon32.png",
     "icons/icon48.png",
@@ -85,19 +116,20 @@ function setAutostart(enabled) {
 
 async function main() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
+  await loadPrefs();
   extPaths = await ensureStableExtensions();
 
   const downloadDir = path.join(STABLE_DIR, "downloads");
   try {
-    await startDownloader({ downloadDir });
+    await startDownloader({ downloadDir, prefs });
   } catch (e) {
     if (e?.code !== "EADDRINUSE") throw e;
     console.log("Servis zaten açık (17890)");
+    setPrefs(prefs);
   }
 
   const image = nativeImage.createFromPath(ICON);
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
-  tray.setToolTip("VidSniff");
   rebuildTrayMenu();
   tray.on("double-click", () => showPanel());
 
@@ -112,7 +144,17 @@ async function main() {
     openAtLogin: app.getLoginItemSettings().openAtLogin,
     downloadDir: getDownloadDir(),
     version: app.getVersion(),
+    lang: prefs.lang,
   }));
+  ipcMain.handle("i18n:get", () => ({
+    lang: prefs.lang,
+    strings: STRINGS[prefs.lang] || STRINGS.en,
+  }));
+  ipcMain.handle("i18n:set", async (_e, lang) => {
+    prefs.lang = normalizeLang(lang);
+    await savePrefs();
+    return prefs.lang;
+  });
   ipcMain.handle("setup:openChromeExt", () => shell.openPath(extPaths.chromeExt));
   ipcMain.handle("setup:openFirefoxExt", () => shell.openPath(extPaths.firefoxExt));
   ipcMain.handle("setup:openBrowserExtensions", (_e, browser) =>
@@ -187,25 +229,32 @@ function findBrowserExe(browser) {
 
 function openBrowserExtensionsPage(browser) {
   const exe = findBrowserExe(browser);
-  if (!exe) return { ok: false, error: `${browser} yüklü görünmüyor` };
+  if (!exe) {
+    return {
+      ok: false,
+      error: t(prefs.lang, "setupBrowserMissing", { browser }),
+    };
+  }
   const url = browser === "edge" ? "edge://extensions" : "chrome://extensions";
   spawn(exe, [url], { detached: true, stdio: "ignore" }).unref();
   return { ok: true, exe, url };
 }
 
 function rebuildTrayMenu() {
+  if (!tray) return;
+  const L = prefs.lang;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "İndirme paneli", click: () => showPanel() },
-      { label: "Eklenti kurulum asistanı", click: () => showSetup() },
-      { label: "Ayarlar", click: () => showSettings() },
+      { label: t(L, "trayPanel"), click: () => showPanel() },
+      { label: t(L, "traySetup"), click: () => showSetup() },
+      { label: t(L, "traySettings"), click: () => showSettings() },
       {
-        label: "İndirmeler klasörü",
+        label: t(L, "trayDownloads"),
         click: () => shell.openPath(getDownloadDir()),
       },
       { type: "separator" },
       {
-        label: "Çıkış",
+        label: t(L, "trayQuit"),
         click: async () => {
           quitting = true;
           try {
@@ -223,7 +272,11 @@ function rebuildTrayMenu() {
 function refreshTrayTitle() {
   if (!tray) return;
   const running = getJobs().filter((j) => j.status === "running").length;
-  tray.setToolTip(running ? `VidSniff — ${running} indirme` : "VidSniff");
+  tray.setToolTip(
+    running
+      ? t(prefs.lang, "trayTooltipRunning", { n: running })
+      : t(prefs.lang, "trayTooltip")
+  );
 }
 
 function showPanel() {
@@ -270,7 +323,7 @@ function showSetup() {
     autoHideMenuBar: true,
     backgroundColor: "#12141a",
     icon: ICON,
-    title: "Eklenti Kurulum Asistanı",
+    title: t(prefs.lang, "setupTitle"),
     webPreferences: {
       preload: path.join(__dirname, "preload-setup.cjs"),
       contextIsolation: true,
@@ -289,12 +342,12 @@ function showSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 440,
-    height: 520,
+    height: 560,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#12141a",
     icon: ICON,
-    title: "VidSniff — Ayarlar",
+    title: t(prefs.lang, "settingsTitle"),
     webPreferences: {
       preload: path.join(__dirname, "preload-setup.cjs"),
       contextIsolation: true,
@@ -314,7 +367,7 @@ if (!gotLock) {
     console.error(e);
     try {
       await dialog.showErrorBox(
-        "VidSniff açılamadı",
+        t(prefs.lang || "en", "errOpenTitle"),
         e?.stack || e?.message || String(e)
       );
     } catch {

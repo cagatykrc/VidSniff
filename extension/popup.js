@@ -1,3 +1,5 @@
+import { t, syncLangFromService } from "./lib/i18n.js";
+
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
 const jobsEl = document.getElementById("jobs");
@@ -5,8 +7,6 @@ const primaryEl = document.getElementById("primary");
 const dlPrimaryBtn = document.getElementById("dlPrimary");
 const primaryMsg = document.getElementById("primaryMsg");
 
-/** @type {Map<string, object>} */
-const probeCache = new Map();
 /** @type {object[]} */
 let serverJobs = [];
 /** @type {object | null} */
@@ -14,8 +14,15 @@ let primaryItem = null;
 
 document.getElementById("dlPrimary").addEventListener("click", () => downloadPrimary());
 
+function applyStatic() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (key) el.textContent = t(key);
+  });
+}
+
 function prettyName(item) {
-  if (!item) return "Video";
+  if (!item) return t("video");
   const url = item.url || "";
   const fn = item.displayName || item.filename || item.pageTitle || "video";
   if (/master\.(txt|m3u8)/i.test(url) || item.hlsKind === "master" || /\/hls\//i.test(url)) {
@@ -26,22 +33,13 @@ function prettyName(item) {
 }
 
 function basename(p) {
-  return String(p || "").split(/[/\\]/).pop() || "dosya";
-}
-
-function formatBytes(n) {
-  if (!n || n <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let i = 0;
-  let v = n;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i += 1;
-  }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  return String(p || "").split(/[/\\]/).pop() || "file";
 }
 
 async function load() {
+  await syncLangFromService();
+  applyStatic();
+
   const jobsRes = await chrome.runtime.sendMessage({ type: "LIST_JOBS" });
   serverJobs = jobsRes?.jobs || [];
   renderJobsBar();
@@ -61,14 +59,15 @@ function isNoise(it) {
 }
 
 function renderPrimary(online) {
-  statusEl.textContent = online ? "servis açık" : "servis kapalı";
+  statusEl.textContent = online ? t("serviceOn") : t("serviceOff");
   statusEl.className = `status ${online ? "online" : "offline"}`;
 
   if (!primaryItem) {
     primaryEl.className = "primary empty";
-    primaryEl.querySelector(".p-title").textContent = "Video oynatınca burada görünür";
-    primaryEl.querySelector(".p-meta").textContent = "Sayfada videoyu başlat → MP4 indirme çıkar";
+    primaryEl.querySelector(".p-title").textContent = t("emptyPrimary");
+    primaryEl.querySelector(".p-meta").textContent = t("emptyPrimaryMeta");
     dlPrimaryBtn.disabled = true;
+    dlPrimaryBtn.textContent = t("mp4Download");
     return;
   }
 
@@ -85,20 +84,21 @@ function renderPrimary(online) {
     .join(" · ");
 
   dlPrimaryBtn.disabled = job?.status === "running" || !online;
-  dlPrimaryBtn.textContent = job?.status === "running" ? "İndiriliyor…" : "MP4 İndir";
+  dlPrimaryBtn.textContent =
+    job?.status === "running" ? t("downloadingEllipsis") : t("mp4Download");
 
   if (job?.status === "done") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg ok";
-    primaryMsg.textContent = `Tamam: ${basename(job.path)}`;
+    primaryMsg.textContent = t("complete", { name: basename(job.path) });
   } else if (job?.status === "error") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg err";
-    primaryMsg.textContent = job.error || "Hata";
+    primaryMsg.textContent = job.error || t("error");
   } else if (job?.status === "running") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg";
-    primaryMsg.textContent = `İndiriliyor… %${Math.round(job.progress || 0)}`;
+    primaryMsg.textContent = `${t("downloadingEllipsis")} %${Math.round(job.progress || 0)}`;
   } else {
     primaryMsg.hidden = true;
   }
@@ -110,7 +110,7 @@ async function downloadPrimary() {
   dlPrimaryBtn.textContent = "...";
   primaryMsg.hidden = false;
   primaryMsg.className = "msg";
-  primaryMsg.textContent = "MP4 indirme başlatılıyor…";
+  primaryMsg.textContent = t("startMp4");
   const result = await chrome.runtime.sendMessage({
     type: "DOWNLOAD",
     item: primaryItem,
@@ -119,16 +119,18 @@ async function downloadPrimary() {
   });
   if (!result?.ok) {
     primaryMsg.className = "msg err";
-    primaryMsg.textContent = result?.error || "Başarısız";
+    primaryMsg.textContent = result?.error || t("failed");
     dlPrimaryBtn.disabled = false;
-    dlPrimaryBtn.textContent = "MP4 İndir";
+    dlPrimaryBtn.textContent = t("mp4Download");
   }
   await load();
 }
 
 function renderJobsBar() {
   if (!jobsEl) return;
-  const recent = [...serverJobs].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0)).slice(0, 6);
+  const recent = [...serverJobs]
+    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+    .slice(0, 6);
   if (!recent.length) {
     jobsEl.hidden = true;
     jobsEl.innerHTML = "";
@@ -137,15 +139,19 @@ function renderJobsBar() {
   jobsEl.hidden = false;
   jobsEl.innerHTML = `
     <div class="jobs-head">
-      <div class="jobs-title">Arka plan indirmeleri</div>
-      <button type="button" class="ghost mini" id="openFolder">Klasör</button>
+      <div class="jobs-title">${escapeHtml(t("bgJobs"))}</div>
+      <button type="button" class="ghost mini" id="openFolder">${escapeHtml(t("openFolder"))}</button>
     </div>
     ${recent
       .map((job) => {
         const pct = Math.round(job.progress || 0);
         const cls = job.status === "done" ? "ok" : job.status === "error" ? "err" : "run";
         const label =
-          job.status === "running" ? `%${pct}` : job.status === "done" ? "tamam" : "hata";
+          job.status === "running"
+            ? `%${pct}`
+            : job.status === "done"
+              ? t("jobDone")
+              : t("jobError");
         return `<div class="job-row ${cls}">
           <div class="job-name">${escapeHtml(basename(job.path) || job.id)}</div>
           <div class="job-meta">${escapeHtml(label)}</div>
@@ -166,7 +172,7 @@ function renderJobsBar() {
 
 function renderList(items) {
   if (!items.length) {
-    listEl.innerHTML = `<div class="empty-mini">Başka yakalama yok</div>`;
+    listEl.innerHTML = `<div class="empty-mini">${escapeHtml(t("noOther"))}</div>`;
     return;
   }
   listEl.innerHTML = "";
@@ -175,7 +181,7 @@ function renderList(items) {
     row.className = "mini-row";
     row.innerHTML = `
       <div class="mini-name" title="${escapeAttr(item.url)}">${escapeHtml(prettyName(item))}</div>
-      <button type="button" class="ghost mini" data-act="dl">İndir</button>
+      <button type="button" class="ghost mini" data-act="dl">${escapeHtml(t("download"))}</button>
     `;
     row.querySelector('[data-act="dl"]').addEventListener("click", async () => {
       await chrome.runtime.sendMessage({ type: "DOWNLOAD", item, mode: "auto", quality: "auto" });

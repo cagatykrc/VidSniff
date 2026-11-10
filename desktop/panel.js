@@ -1,20 +1,42 @@
 const listEl = document.getElementById("list");
 const API = window.vidsniff?.api || "http://127.0.0.1:17890";
 
+/** @type {Record<string, string>} */
+let S = {};
+
 document.getElementById("openDir").addEventListener("click", () => {
   window.vidsniff?.openDownloads?.();
 });
-
 document.getElementById("openSetup")?.addEventListener("click", () => {
   window.vidsniff?.openSetup?.();
 });
-
 document.getElementById("openSettings")?.addEventListener("click", () => {
   window.vidsniff?.openSettings?.();
 });
 
+function applyStatic() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (key && S[key]) el.innerHTML = S[key];
+  });
+}
+
+async function refreshI18n() {
+  try {
+    const data = await window.vidsniff?.getI18n?.();
+    if (data?.strings) {
+      S = data.strings;
+      document.documentElement.lang = data.lang || "en";
+      applyStatic();
+      await load();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function basename(p) {
-  if (!p) return "dosya";
+  if (!p) return S.panelFile || "file";
   return String(p).split(/[/\\]/).pop();
 }
 
@@ -36,7 +58,7 @@ async function load() {
 
 function render(jobs) {
   if (!jobs.length) {
-    listEl.innerHTML = `<div class="empty">Henüz indirme yok.<br/>Chrome eklentisinden video indir.</div>`;
+    listEl.innerHTML = `<div class="empty">${S.panelEmpty || ""}</div>`;
     return;
   }
 
@@ -60,7 +82,7 @@ function render(jobs) {
     if (job.status === "done" && job.path) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "Göster";
+      btn.textContent = S.panelShow || "Show";
       btn.addEventListener("click", () => window.vidsniff?.showInFolder?.(job.path));
       el.querySelector(".meta span:last-child").appendChild(btn);
     }
@@ -76,5 +98,6 @@ function esc(s) {
     .replaceAll('"', "&quot;");
 }
 
-load();
+refreshI18n();
+window.vidsniff?.onLangChanged?.(() => refreshI18n());
 setInterval(load, 1000);

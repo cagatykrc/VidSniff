@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VidSniff — Ayarlar</title>
+  <title>Settings</title>
   <style>
     :root {
       --bg: #12141a;
@@ -33,12 +33,6 @@
       margin-bottom: 10px;
     }
     .card h2 { margin: 0 0 8px; font-size: 13px; }
-    .row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
     label.toggle {
       display: flex;
       align-items: center;
@@ -57,6 +51,16 @@
       font: 11px/1.4 ui-monospace, Consolas, monospace;
       color: #fdba74;
       word-break: break-all;
+    }
+    .lang-row { display: flex; gap: 8px; margin-top: 8px; }
+    .lang-row button {
+      flex: 1;
+    }
+    .lang-row button.active {
+      background: linear-gradient(180deg, #ff7a2f, #e85d04);
+      border-color: #c2410c;
+      color: #fff;
+      font-weight: 700;
     }
     button {
       appearance: none;
@@ -86,51 +90,88 @@
   </style>
 </head>
 <body>
-  <h1>Ayarlar</h1>
-  <p class="lead">Uygulama tercihleri</p>
+  <h1 data-i18n="settingsTitle">Settings</h1>
+  <p class="lead" data-i18n="settingsLead">App preferences</p>
 
   <section class="card">
-    <h2>Başlangıç</h2>
-    <label class="toggle">
-      <input type="checkbox" id="autostart" />
-      <span>Windows açılınca VidSniff’i başlat</span>
-    </label>
-    <p class="hint">Kurulumdan sonra tepside sessizce çalışır; video indirme servisi hazır olur.</p>
-  </section>
-
-  <section class="card">
-    <h2>İndirmeler</h2>
-    <p class="hint">Dosyalar bu klasöre kaydedilir.</p>
-    <div class="path" id="downloadPath">…</div>
-    <div class="actions">
-      <button class="primary" id="openDownloads" type="button">Klasörü aç</button>
+    <h2 data-i18n="settingsLanguage">Language</h2>
+    <p class="hint" data-i18n="settingsLanguageHint">UI language for the app and browser extension.</p>
+    <div class="lang-row">
+      <button type="button" id="langEn">English</button>
+      <button type="button" id="langTr">Türkçe</button>
     </div>
   </section>
 
   <section class="card">
-    <h2>Eklenti</h2>
-    <p class="hint">Tarayıcı eklentisini kurmak veya yeniden yüklemek için asistanı aç.</p>
+    <h2 data-i18n="settingsStartup">Startup</h2>
+    <label class="toggle">
+      <input type="checkbox" id="autostart" />
+      <span data-i18n="settingsAutostart">Launch VidSniff when Windows starts</span>
+    </label>
+    <p class="hint" data-i18n="settingsAutostartHint">Runs quietly in the tray so the download service is ready.</p>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="settingsDownloads">Downloads</h2>
+    <p class="hint" data-i18n="settingsDownloadsHint">Files are saved to this folder.</p>
+    <div class="path" id="downloadPath">…</div>
     <div class="actions">
-      <button id="openExtSetup" type="button">Eklenti kurulum asistanı</button>
+      <button class="primary" id="openDownloads" type="button" data-i18n="settingsOpenFolder">Open folder</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="settingsExtension">Extension</h2>
+    <p class="hint" data-i18n="settingsExtensionHint">Open the assistant to install or reload the extension.</p>
+    <div class="actions">
+      <button id="openExtSetup" type="button" data-i18n="settingsExtBtn">Extension setup assistant</button>
     </div>
   </section>
 
   <div class="foot">
     <span id="version">VidSniff</span>
-    <button id="closeSettings" type="button">Kapat</button>
+    <button id="closeSettings" type="button" data-i18n="settingsClose">Close</button>
   </div>
 
   <script>
     const api = window.vidsniffSetup;
-    api.getPaths().then((p) => {
+    let lang = "en";
+
+    function apply(strings) {
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (key && strings[key]) el.textContent = strings[key];
+      });
+      document.title = strings.settingsTitle || "Settings";
+      document.getElementById("langEn").classList.toggle("active", lang === "en");
+      document.getElementById("langTr").classList.toggle("active", lang === "tr");
+    }
+
+    async function refresh() {
+      const [i18n, p] = await Promise.all([api.getI18n(), api.getPaths()]);
+      lang = i18n.lang || p.lang || "en";
+      document.documentElement.lang = lang;
+      apply(i18n.strings || {});
       document.getElementById("autostart").checked = !!p.openAtLogin;
       document.getElementById("downloadPath").textContent = p.downloadDir || "";
       if (p.version) document.getElementById("version").textContent = "VidSniff " + p.version;
-    });
+    }
+
+    document.getElementById("langEn").onclick = async () => {
+      await api.setLang("en");
+      await refresh();
+    };
+    document.getElementById("langTr").onclick = async () => {
+      await api.setLang("tr");
+      await refresh();
+    };
     document.getElementById("autostart").onchange = (e) => api.setAutostart(e.target.checked);
     document.getElementById("openDownloads").onclick = () => api.openDownloads();
     document.getElementById("openExtSetup").onclick = () => api.openGuide();
     document.getElementById("closeSettings").onclick = () => api.closeSettings();
+
+    refresh();
+    api.onLangChanged(() => refresh());
   </script>
 </body>
 </html>

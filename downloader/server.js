@@ -24,11 +24,34 @@ function resolveDownloadDir() {
 }
 
 let DOWNLOAD_DIR = resolveDownloadDir();
+/** @type {{ lang?: string }} */
+let PREFS = { lang: "tr" };
 
 /** @type {Map<string, object>} */
 const jobs = new Map();
 /** @type {import('node:http').Server | null} */
 let server = null;
+
+export function setPrefs(next = {}) {
+  PREFS = { ...PREFS, ...next };
+  return PREFS;
+}
+
+export function getPrefs() {
+  return { ...PREFS };
+}
+
+function loadPrefsFromDisk() {
+  try {
+    const prefsPath = path.join(path.dirname(DOWNLOAD_DIR), "prefs.json");
+    if (fs.existsSync(prefsPath)) {
+      const raw = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+      if (raw && typeof raw === "object") PREFS = { ...PREFS, ...raw };
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function getJobs() {
   return [...jobs.values()].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
@@ -38,10 +61,12 @@ export function getDownloadDir() {
   return DOWNLOAD_DIR;
 }
 
-export async function startDownloader({ port = PORT, downloadDir } = {}) {
+export async function startDownloader({ port = PORT, downloadDir, prefs } = {}) {
   if (downloadDir) DOWNLOAD_DIR = downloadDir;
   else DOWNLOAD_DIR = resolveDownloadDir();
   await fsp.mkdir(DOWNLOAD_DIR, { recursive: true });
+  loadPrefsFromDisk();
+  if (prefs) setPrefs(prefs);
 
   if (server?.listening) {
     return { server, port, downloadDir: DOWNLOAD_DIR, jobs };
@@ -59,7 +84,17 @@ export async function startDownloader({ port = PORT, downloadDir } = {}) {
 
     try {
       if (req.method === "GET" && url.pathname === "/health") {
-        return json(res, 200, { ok: true, downloadDir: DOWNLOAD_DIR, jobs: jobs.size });
+        return json(res, 200, {
+          ok: true,
+          downloadDir: DOWNLOAD_DIR,
+          jobs: jobs.size,
+          lang: PREFS.lang || "tr",
+        });
+      }
+
+      if (req.method === "GET" && url.pathname === "/prefs") {
+        loadPrefsFromDisk();
+        return json(res, 200, getPrefs());
       }
 
       if (req.method === "GET" && url.pathname === "/jobs") {

@@ -1,8 +1,12 @@
 # VidSniff
 
-**EN** · Browser video sniffer + local MP4 downloader. Tray app + extension. Captures HLS streams and saves them as MP4.
+## English
 
-**TR** · Tarayıcıdan video yakalayan, yerel olarak MP4 indiren araç. Tepsi uygulaması + eklenti. HLS akışlarını MP4 olarak kaydeder.
+Browser video sniffer + local MP4 downloader. A tray app and browser extension that catch HLS/media streams and save them as MP4.
+
+## Türkçe
+
+Tarayıcıdan video yakalayan, yerel olarak MP4 indiren araç. Tepsi uygulaması ve eklenti ile HLS/medya akışlarını yakalayıp MP4 olarak kaydeder.
 
 ![Download panel](docs/screenshots/panel.svg)
 ![Floating overlay](docs/screenshots/overlay.svg)
@@ -11,13 +15,13 @@
 
 ## Features / Özellikler
 
-| EN | TR |
+| English | Türkçe |
 | --- | --- |
 | Floating **Download** button on video players | Video üzerinde yüzen **İndir** butonu |
 | Tray download panel with progress | Tepsi indirme paneli + ilerleme |
 | HLS → MP4 (with audio when available) | HLS → MP4 (mümkünse sesli) |
 | Extension install assistant | Eklenti kurulum asistanı |
-| Settings: start with Windows | Ayarlar: Windows ile başlat |
+| Settings: language (EN/TR) + start with Windows | Ayarlar: dil (EN/TR) + Windows ile başlat |
 | Chrome / Edge / Brave (+ Firefox temporary) | Chrome / Edge / Brave (+ Firefox geçici) |
 
 ![Extension setup](docs/screenshots/extension-setup.svg)
@@ -25,47 +29,38 @@
 
 ---
 
-## Install (users) / Kurulum (kullanıcı)
+## Install / Kurulum
 
-### 1. App / Uygulama
+### English
 
-Download the latest **Setup** from [Releases](../../releases):
+1. Download `VidSniff-Setup-x.y.z.exe` from [Releases](../../releases)
+2. Install → open from Start Menu (runs in the system tray)
+3. Open **Settings** to pick **English** or **Türkçe**, and optionally “Launch when Windows starts”
+4. Use **Install extension** → Load unpacked → `%LOCALAPPDATA%\VidSniff\extension-chrome`
+5. Play a video → click **Download** → files go to `%LOCALAPPDATA%\VidSniff\downloads`
 
-- `VidSniff-Setup-x.y.z.exe`
+### Türkçe
 
-Run the installer → Start Menu / Desktop shortcut → VidSniff stays in the system tray.
+1. [Releases](../../releases) sayfasından `VidSniff-Setup-x.y.z.exe` indir
+2. Kur → Başlat menüsünden aç (sistem tepsisinde çalışır)
+3. **Ayarlar**’dan **English** / **Türkçe** seç; istersen “Windows açılınca başlat”ı aç
+4. **Eklenti kur** → Paketlenmemiş öğe yükle → `%LOCALAPPDATA%\VidSniff\extension-chrome`
+5. Videoyu oynat → **İndir** → dosyalar: `%LOCALAPPDATA%\VidSniff\downloads`
 
-Windows ile her açılışta çalışsın istersen: **Ayarlar → Windows açılınca VidSniff’i başlat**.
-
-### 2. Browser extension / Tarayıcı eklentisi (once)
-
-1. Open VidSniff → **Eklenti kur** / tray → **Eklenti kurulum asistanı**
-2. Click **Chrome için kur** or **Edge için kur**
-3. Enable **Developer mode** → **Load unpacked**
-4. Select: `%LOCALAPPDATA%\VidSniff\extension-chrome`
-
-**Firefox / Zen:** unsigned extensions are temporary — `about:debugging` → Load Temporary Add-on →  
+**Firefox / Zen:** `about:debugging` → Load Temporary Add-on →  
 `%LOCALAPPDATA%\VidSniff\extension-firefox\manifest.json`
-
-### 3. Use / Kullanım
-
-1. Play a video in the browser  
-2. Click the floating **İndir** button (or extension popup → **MP4 İndir**)  
-3. Files: `%LOCALAPPDATA%\VidSniff\downloads`
 
 ---
 
 ## Project layout / Proje yapısı
 
 ```
-desktop/       Electron tray app (panel, setup, settings)
+desktop/       Electron tray app (panel, setup, settings, i18n)
 downloader/    Local HTTP download service (HLS → MP4)
-extension/     Browser extension (Chrome + Firefox manifests)
-docs/          Screenshots & docs assets
-scripts/       Build helpers (icons, pack extension)
+extension/     Browser extension (Chrome + Firefox)
+docs/          Screenshots & publish notes
+scripts/       Build helpers
 ```
-
-Open and readable — no hidden packaging magic beyond Electron Builder.
 
 ---
 
@@ -73,24 +68,22 @@ Open and readable — no hidden packaging magic beyond Electron Builder.
 
 ```bash
 npm install
-npm run app          # tray app + downloader
-npm start            # downloader only (no UI)
-npm run pack:ext     # copy extension to LocalAppData + zip
-npm run dist         # Windows Setup installer (NSIS)
+npm run app           # tray app + downloader
+npm start             # downloader only
+npm run pack:ext      # copy extension to LocalAppData
+npm run dist          # Windows Setup (NSIS)
 npm run dist:portable # optional portable exe
 ```
 
-Requirements: Node.js 18+, Windows. Optional: `ffmpeg` on PATH for best HLS remux.
+Requires Node.js 18+ on Windows. Optional: `ffmpeg` on PATH.
 
 ---
 
-## GitHub repo blurb / Kısa açıklama
+## GitHub About
 
-**EN:** IDM-like video sniffer for the browser — tray app + extension that catches streams and saves MP4.
+**English:** IDM-like video sniffer — tray app + browser extension that catches streams and saves MP4.
 
-**TR:** Tarayıcı için IDM tarzı video yakalayıcı — tepsi uygulaması + eklenti ile akışı yakalayıp MP4 kaydeder.
-
-Suggested topics: `video-downloader`, `hls`, `electron`, `browser-extension`, `mp4`, `chrome-extension`
+**Türkçe:** IDM tarzı video yakalayıcı — tepsi uygulaması + eklenti ile akışı yakalayıp MP4 kaydeder.
 
 ---
 
@@ -99,4 +92,3 @@ Suggested topics: `video-downloader`, `hls`, `electron`, `browser-extension`, `m
 MIT — see [LICENSE](LICENSE).
 
 Use only for content you have the right to download.
-)

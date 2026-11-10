@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Eklenti Kurulum Asistanı</title>
+  <title>Extension setup</title>
   <style>
     :root {
       --bg: #12141a;
@@ -78,86 +78,98 @@
       color: var(--muted);
       font-size: 12px;
     }
-    .foot {
-      margin-top: 16px;
-      display: flex;
-      justify-content: flex-end;
-    }
+    .foot { margin-top: 16px; display: flex; justify-content: flex-end; }
   </style>
 </head>
 <body>
-  <h1>Eklenti kurulum asistanı</h1>
-  <p class="lead">VidSniff servisi çalışıyor. Tarayıcıya eklentiyi bir kez eklemen yeterli.</p>
+  <h1 data-i18n="setupTitle">Extension setup assistant</h1>
+  <p class="lead" data-i18n="setupLead">VidSniff is running. Add the browser extension once.</p>
 
   <div class="steps">
     <section class="step">
-      <span class="n">1</span><h2>Eklenti klasörü</h2>
-      <p>Bu klasörü “Paketlenmemiş öğe yükle” ile seçeceksin.</p>
+      <span class="n">1</span><h2 data-i18n="setupStep1">Extension folder</h2>
+      <p data-i18n="setupStep1Body">Choose this folder with “Load unpacked”.</p>
       <div class="path" id="chromePath">…</div>
       <div class="row">
-        <button class="primary" id="openFolder" type="button">Klasörü aç</button>
-        <button id="copyPath" type="button">Yolu kopyala</button>
+        <button class="primary" id="openFolder" type="button" data-i18n="setupOpenFolder">Open folder</button>
+        <button id="copyPath" type="button" data-i18n="setupCopyPath">Copy path</button>
       </div>
     </section>
 
     <section class="step">
-      <span class="n">2</span><h2>Tarayıcıda yükle</h2>
-      <p>Geliştirici modu → <b>Paketlenmemiş öğe yükle</b> → 1. adımdaki klasör.</p>
+      <span class="n">2</span><h2 data-i18n="setupStep2">Load in browser</h2>
+      <p data-i18n="setupStep2Body">Developer mode → Load unpacked → select the folder above.</p>
       <div class="row">
-        <button class="primary" id="guideChrome" type="button">Chrome için kur</button>
-        <button class="primary" id="guideEdge" type="button">Edge için kur</button>
-        <button id="openBrave" type="button">Brave</button>
+        <button class="primary" id="guideChrome" type="button" data-i18n="setupChrome">Install for Chrome</button>
+        <button class="primary" id="guideEdge" type="button" data-i18n="setupEdge">Install for Edge</button>
+        <button id="openBrave" type="button" data-i18n="setupBrave">Brave</button>
       </div>
       <div class="hint" id="hint"></div>
     </section>
   </div>
 
   <div class="alt">
-    <b>Firefox / Zen:</b> kalıcı kurulum sınırlı.
-    <code>about:debugging</code> → Load Temporary Add-on →
+    <span data-i18n="setupFfNote">Firefox / Zen: about:debugging → Load Temporary Add-on →</span>
     <span id="ffManifest">manifest.json</span>
     <div class="row">
-      <button id="openFf" type="button">Firefox eklenti klasörü</button>
+      <button id="openFf" type="button" data-i18n="setupFfFolder">Firefox extension folder</button>
     </div>
   </div>
 
   <div class="foot">
-    <button id="closeSetup" type="button">Tamam</button>
+    <button id="closeSetup" type="button" data-i18n="setupDone">Done</button>
   </div>
 
   <script>
+    let S = {};
     const hint = document.getElementById("hint");
-    function flash(t) { hint.textContent = t; }
+    function flash(msg) { hint.textContent = msg; }
 
-    window.vidsniffSetup.getPaths().then((p) => {
+    function apply() {
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (key && S[key]) el.textContent = S[key];
+      });
+      document.title = S.setupTitle || "Setup";
+    }
+
+    async function refresh() {
+      const data = await window.vidsniffSetup.getI18n();
+      S = data.strings || {};
+      document.documentElement.lang = data.lang || "en";
+      apply();
+      const p = await window.vidsniffSetup.getPaths();
       document.getElementById("chromePath").textContent = p.chromeExt;
       document.getElementById("ffManifest").textContent = p.firefoxExt + "\\manifest.json";
-    });
+    }
 
     document.getElementById("openFolder").onclick = async () => {
       await window.vidsniffSetup.openChromeExt();
-      flash("Klasör açıldı — bunu tarayıcıda seç.");
+      flash(S.setupFolderOpened || "");
     };
     document.getElementById("copyPath").onclick = async () => {
       const p = await window.vidsniffSetup.getPaths();
       await navigator.clipboard.writeText(p.chromeExt);
-      flash("Yol panoya kopyalandı.");
+      flash(S.setupPathCopied || "");
     };
     document.getElementById("guideChrome").onclick = async () => {
       const r = await window.vidsniffSetup.runGuide("chrome");
-      flash(r?.ok ? "Chrome eklenti sayfası açıldı. Geliştirici modu → Paketlenmemiş yükle." : (r?.error || "Chrome bulunamadı."));
+      flash(r?.ok ? S.setupChromeOpened : (r?.error || ""));
     };
     document.getElementById("guideEdge").onclick = async () => {
       const r = await window.vidsniffSetup.runGuide("edge");
-      flash(r?.ok ? "Edge eklenti sayfası açıldı. Geliştirici modu → Paketlenmemiş yükle." : (r?.error || "Edge bulunamadı."));
+      flash(r?.ok ? S.setupEdgeOpened : (r?.error || ""));
     };
     document.getElementById("openBrave").onclick = async () => {
       await window.vidsniffSetup.openChromeExt();
       const r = await window.vidsniffSetup.openBrowserExtensions("brave");
-      flash(r?.ok ? "Brave eklenti sayfası açıldı." : (r?.error || "Brave bulunamadı."));
+      flash(r?.ok ? S.setupBraveOpened : (r?.error || ""));
     };
     document.getElementById("openFf").onclick = () => window.vidsniffSetup.openFirefoxExt();
     document.getElementById("closeSetup").onclick = () => window.vidsniffSetup.close();
+
+    refresh();
+    window.vidsniffSetup.onLangChanged(() => refresh());
   </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,22 +12,22 @@
       <div class="logo"></div>
       <div>
         <h1>VidSniff</h1>
-        <p class="sub">Sistem tepsisi indirme paneli</p>
+        <p class="sub" data-i18n="panelSub">Tray download panel</p>
       </div>
     </div>
     <div class="top-actions">
-      <button id="openDir" type="button" class="ghost">Klasör</button>
-      <button id="openSettings" type="button" class="ghost">Ayarlar</button>
+      <button id="openDir" type="button" class="ghost" data-i18n="panelFolder">Folder</button>
+      <button id="openSettings" type="button" class="ghost" data-i18n="panelSettings">Settings</button>
     </div>
   </header>
 
   <div class="install-bar">
-    <span>Eklenti yoksa video yakalanmaz.</span>
-    <button id="openSetup" type="button" class="primary">Eklenti kur</button>
+    <span data-i18n="panelInstallHint">Videos won’t be caught without the extension.</span>
+    <button id="openSetup" type="button" class="primary" data-i18n="panelInstallBtn">Install extension</button>
   </div>
 
   <main id="list" class="list">
-    <div class="empty">Henüz indirme yok. Eklentiden video indir.</div>
+    <div class="empty" data-i18n="panelEmpty">No downloads yet.</div>
   </main>
 
   <script src="panel.js"></script>

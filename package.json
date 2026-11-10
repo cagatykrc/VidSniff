@@ -1,7 +1,7 @@
 {
   "name": "vidsniff",
-  "version": "1.7.0",
-  "description": "Browser video sniffer + local MP4 downloader (tray app + extension)",
+  "version": "1.7.1",
+  "description": "EN: Browser video sniffer + MP4 downloader. TR: Tarayıcı video yakalayıcı + MP4 indirme.",
   "author": "Bestami",
   "license": "MIT",
   "type": "module",
@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bestami/vidsniff"
+    "url": "https://github.com/cagatykrc/VidSniff"
   },
   "keywords": [
     "video-downloader",

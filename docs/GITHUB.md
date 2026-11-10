@@ -1,25 +1,21 @@
-# GitHub publish checklist
+# GitHub publish notes
 
 ## About (repo description)
 
-**EN:** IDM-like video sniffer — tray app + browser extension that catches streams and saves MP4.
+Pick **one** for the GitHub About field (short):
 
-**TR:** IDM tarzı video yakalayıcı — tepsi uygulaması + eklenti ile akışı yakalayıp MP4 kaydeder.
+**English:**  
+`IDM-like video sniffer — tray app + browser extension that catches streams and saves MP4`
+
+**Türkçe:**  
+`IDM tarzı video yakalayıcı — tepsi uygulaması + eklenti ile akışı yakalayıp MP4 kaydeder`
+
+README already contains both full descriptions.
 
 ## Topics
 
 `video-downloader` `hls` `mp4` `electron` `browser-extension` `chrome-extension` `idm`
 
-## Release assets
+## Release asset
 
-After `npm run dist`, upload from `release/`:
-
-- `VidSniff-Setup-1.7.0.exe`
-
-Optional: `npm run dist:portable` → `VidSniff-Portable-1.7.0.exe`
-
-## Notes for visitors
-
-- Windows Setup installs Start Menu + Desktop shortcuts; app runs from tray.
-- Extension must be loaded once (assistant guides Chrome/Edge).
-- Autostart lives under **Settings**, not the extension wizard.
+`VidSniff-Setup-1.7.0.exe` (from `npm run dist`)

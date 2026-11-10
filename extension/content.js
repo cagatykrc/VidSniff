@@ -145,6 +145,10 @@
     }
   }
 
+  function tt(key) {
+    return globalThis.VidSniffI18n?.t?.(key) || key;
+  }
+
   function ensurePanel() {
     if (panel && document.contains(panel)) return panel;
     panel = document.createElement("div");
@@ -153,14 +157,14 @@
       <div class="vs-shell">
         <button type="button" class="vs-main" data-act="toggle" title="VidSniff">
           <span class="vs-dot" aria-hidden="true"></span>
-          <span data-act="label">İndir</span>
+          <span data-act="label">${tt("download")}</span>
         </button>
-        <button type="button" class="vs-close" data-act="close" title="Kapat" aria-label="Kapat">×</button>
+        <button type="button" class="vs-close" data-act="close" title="${tt("close")}" aria-label="${tt("close")}">×</button>
       </div>
       <div class="vs-menu" hidden>
-        <div class="vs-title" data-act="title">Video</div>
+        <div class="vs-title" data-act="title">${tt("video")}</div>
         <div class="vs-meta" data-act="meta">MP4</div>
-        <button type="button" class="vs-dl" data-act="download">MP4 olarak indir</button>
+        <button type="button" class="vs-dl" data-act="download">${tt("downloadAsMp4")}</button>
         <div class="vs-status" data-act="status" hidden></div>
       </div>
     `;
@@ -190,13 +194,20 @@
 
   function updatePanelLabel() {
     if (!panel) return;
-    const title = primary?.displayName || primary?.filename || document.title || "Video";
+    const title = primary?.displayName || primary?.filename || document.title || tt("video");
     const clean = String(title).replace(/\.(m3u8|txt|ts)$/i, ".mp4");
     panel.querySelector('[data-act="title"]').textContent = clean;
     panel.querySelector('[data-act="meta"]').textContent = primary
-      ? "MP4 · en iyi kalite"
-      : "Video yakalanınca hazır";
-    panel.querySelector('[data-act="label"]').textContent = "İndir";
+      ? tt("mp4Best")
+      : tt("waitingCapture");
+    panel.querySelector('[data-act="label"]').textContent = tt("download");
+    const closeBtn = panel.querySelector('[data-act="close"]');
+    if (closeBtn) {
+      closeBtn.title = tt("close");
+      closeBtn.setAttribute("aria-label", tt("close"));
+    }
+    const dl = panel.querySelector('[data-act="download"]');
+    if (dl) dl.textContent = tt("downloadAsMp4");
   }
 
   function hidePanel() {
@@ -231,13 +242,13 @@
     const btn = panel.querySelector('[data-act="download"]');
     status.hidden = false;
     status.className = "vs-status";
-    status.textContent = "Başlatılıyor…";
+    status.textContent = tt("starting");
     btn.disabled = true;
     try {
       await refreshPrimary();
       if (!primary) {
         status.className = "vs-status err";
-        status.textContent = "Önce videoyu oynat";
+        status.textContent = tt("playFirst");
         return;
       }
       const result = await chrome.runtime.sendMessage({
@@ -248,11 +259,11 @@
       });
       if (result?.ok) {
         status.className = "vs-status ok";
-        status.textContent = result.jobId ? "İndirme sürüyor" : "Başladı";
+        status.textContent = result.jobId ? tt("downloading") : tt("started");
         watchJob(result.jobId, status);
       } else {
         status.className = "vs-status err";
-        status.textContent = result?.error || "Başarısız";
+        status.textContent = result?.error || tt("failed");
       }
     } catch (e) {
       status.className = "vs-status err";
@@ -274,11 +285,11 @@
           statusEl.textContent = `%${Math.round(job.progress || 0)}`;
         } else if (job.status === "done") {
           statusEl.className = "vs-status ok";
-          statusEl.textContent = "Tamam";
+          statusEl.textContent = tt("done");
           return;
         } else if (job.status === "error") {
           statusEl.className = "vs-status err";
-          statusEl.textContent = job.error || "Hata";
+          statusEl.textContent = job.error || tt("error");
           return;
         }
       } catch {
@@ -322,6 +333,7 @@
   window.addEventListener("hashchange", onNavigate);
 
   collect();
+  globalThis.VidSniffI18n?.syncFromService?.().then(() => updatePanelLabel());
 
   const obs = new MutationObserver(() => {
     window.clearTimeout(obs._t);
@@ -342,5 +354,8 @@
     reportCandidate();
     refreshPrimary();
     if (allowedToShow) placePanel();
+    globalThis.VidSniffI18n?.syncFromService?.().then(() => {
+      if (panel) updatePanelLabel();
+    });
   }, 1500);
 })();
