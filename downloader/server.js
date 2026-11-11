@@ -364,12 +364,13 @@ function sanitize(name) {
   return base || "video.mp4";
 }
 
-/** film.mp4 / film.m3u8 / film → film.mp4 (asla film.mp4.mp4 değil) */
+/** film.mp4 / film.m3u8 / film.mp4.mp4 → film.mp4 */
 function ensureMp4(name) {
-  const stem = String(name || "video")
-    .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
-    .replace(/\.+$/, "")
-    .trim() || "video";
+  let stem = String(name || "video").trim();
+  while (/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i.test(stem)) {
+    stem = stem.replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "");
+  }
+  stem = stem.replace(/\.+$/, "").trim() || "video";
   return `${stem}.mp4`;
 }
 

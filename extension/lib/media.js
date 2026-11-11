@@ -101,10 +101,12 @@ export function guessFilename(url, contentType = "", pageTitle = "") {
 }
 
 export function ensureMp4Name(name) {
-  const stem = String(name || "video")
-    .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
-    .replace(/\.+$/, "")
-    .trim() || "video";
+  let stem = String(name || "video").trim();
+  // film.mp4.mp4 / film.m3u8.mp4 gibi tekrarlayan uzantıları temizle
+  while (/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i.test(stem)) {
+    stem = stem.replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "");
+  }
+  stem = stem.replace(/\.+$/, "").trim() || "video";
   return `${stem}.mp4`;
 }
 

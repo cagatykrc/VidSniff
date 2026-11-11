@@ -199,10 +199,11 @@
   }
 
   function ensureMp4Name(name) {
-    const stem = String(name || "video")
-      .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
-      .replace(/\.+$/, "")
-      .trim() || "video";
+    let stem = String(name || "video").trim();
+    while (/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i.test(stem)) {
+      stem = stem.replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "");
+    }
+    stem = stem.replace(/\.+$/, "").trim() || "video";
     return `${stem}.mp4`;
   }
 
