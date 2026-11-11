@@ -9,6 +9,7 @@ export const STRINGS = {
     traySetup: "Extension setup assistant",
     traySettings: "Settings",
     trayDownloads: "Downloads folder",
+    trayCheckUpdate: "Check for updates",
     trayQuit: "Quit",
 
     panelSub: "Tray download panel",
@@ -58,7 +59,26 @@ export const STRINGS = {
     settingsExtension: "Extension",
     settingsExtensionHint: "Open the assistant to install or reload the extension.",
     settingsExtBtn: "Extension setup assistant",
+    settingsUpdates: "Updates",
+    settingsUpdatesHint:
+      "On every launch VidSniff checks GitHub Releases for a newer Setup.",
+    settingsCheckUpdate: "Check for updates",
     settingsClose: "Close",
+
+    updateAvailableTitle: "Update available",
+    updateAvailableBody:
+      "VidSniff {latest} is available (you have {current}).\n\nDownload and install now?",
+    updateNoneTitle: "Up to date",
+    updateNoneBody: "You already have the latest version ({current}).",
+    updateDownloadingTitle: "Downloading update",
+    updateDownloadingBody: "Downloading VidSniff {latest}… {pct}%",
+    updateErrorTitle: "Update failed",
+    updateErrorBody: "Could not update: {error}",
+    updateNoAsset:
+      "Version {latest} exists on GitHub but no Setup .exe was attached to the Release.",
+    updateYes: "Update",
+    updateLater: "Later",
+    updateOk: "OK",
 
     errOpenTitle: "VidSniff failed to start",
   },
@@ -70,6 +90,7 @@ export const STRINGS = {
     traySetup: "Eklenti kurulum asistanı",
     traySettings: "Ayarlar",
     trayDownloads: "İndirmeler klasörü",
+    trayCheckUpdate: "Güncellemeleri kontrol et",
     trayQuit: "Çıkış",
 
     panelSub: "Sistem tepsisi indirme paneli",
@@ -121,7 +142,26 @@ export const STRINGS = {
     settingsExtensionHint:
       "Tarayıcı eklentisini kurmak veya yeniden yüklemek için asistanı aç.",
     settingsExtBtn: "Eklenti kurulum asistanı",
+    settingsUpdates: "Güncellemeler",
+    settingsUpdatesHint:
+      "Her açılışta VidSniff, GitHub Releases’ta daha yeni Setup var mı diye bakar.",
+    settingsCheckUpdate: "Güncellemeleri kontrol et",
     settingsClose: "Kapat",
+
+    updateAvailableTitle: "Güncelleme var",
+    updateAvailableBody:
+      "VidSniff {latest} çıktı (şu an {current}).\n\nŞimdi indirip kurulsun mu?",
+    updateNoneTitle: "Güncelsiniz",
+    updateNoneBody: "En son sürüm zaten yüklü ({current}).",
+    updateDownloadingTitle: "Güncelleme indiriliyor",
+    updateDownloadingBody: "VidSniff {latest} indiriliyor… %{pct}",
+    updateErrorTitle: "Güncelleme başarısız",
+    updateErrorBody: "Güncellenemedi: {error}",
+    updateNoAsset:
+      "GitHub’da {latest} sürümü var ama Release’e Setup .exe eklenmemiş.",
+    updateYes: "Güncelle",
+    updateLater: "Sonra",
+    updateOk: "Tamam",
 
     errOpenTitle: "VidSniff açılamadı",
   },

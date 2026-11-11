@@ -60,6 +60,12 @@ scripts/       Build helpers
 
 ---
 
+## Updates / Güncellemeler
+
+**EN:** On every launch the app checks [GitHub Releases](https://github.com/cagatykrc/VidSniff/releases). If a newer `VidSniff-Setup-*.exe` exists, it offers to download and install. Manual check: tray / Settings → Check for updates. Pushing commits alone is not enough — publish a **Release** with the Setup file (see `docs/GITHUB.md`).
+
+**TR:** Her açılışta uygulama [GitHub Releases](https://github.com/cagatykrc/VidSniff/releases) bakar. Daha yeni `VidSniff-Setup-*.exe` varsa indirme/kurulum sunar. Elle kontrol: tepsi / Ayarlar → Güncellemeleri kontrol et. Sadece commit yetmez — Setup dosyasını bir **Release** olarak yayınla (`docs/GITHUB.md`).
+
 ## Develop / Geliştirme
 
 ```bash

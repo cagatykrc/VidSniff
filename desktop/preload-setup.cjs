@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("vidsniffSetup", {
   close: () => ipcRenderer.invoke("setup:close"),
   closeSettings: () => ipcRenderer.invoke("settings:close"),
   openGuide: () => ipcRenderer.invoke("ui:openSetup"),
+  checkUpdate: () => ipcRenderer.invoke("update:check", { silent: false }),
   onLangChanged: (cb) => {
     const handler = (_e, lang) => cb(lang);
     ipcRenderer.on("lang:changed", handler);

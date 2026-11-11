@@ -128,6 +128,15 @@
     </div>
   </section>
 
+  <section class="card">
+    <h2 data-i18n="settingsUpdates">Updates</h2>
+    <p class="hint" data-i18n="settingsUpdatesHint">On every launch VidSniff checks GitHub Releases for a newer Setup.</p>
+    <div class="actions">
+      <button class="primary" id="checkUpdate" type="button" data-i18n="settingsCheckUpdate">Check for updates</button>
+    </div>
+    <p class="hint" id="updateStatus"></p>
+  </section>
+
   <div class="foot">
     <span id="version">VidSniff</span>
     <button id="closeSettings" type="button" data-i18n="settingsClose">Close</button>
@@ -168,6 +177,20 @@
     document.getElementById("autostart").onchange = (e) => api.setAutostart(e.target.checked);
     document.getElementById("openDownloads").onclick = () => api.openDownloads();
     document.getElementById("openExtSetup").onclick = () => api.openGuide();
+    document.getElementById("checkUpdate").onclick = async () => {
+      const st = document.getElementById("updateStatus");
+      const btn = document.getElementById("checkUpdate");
+      btn.disabled = true;
+      st.textContent = "…";
+      try {
+        await api.checkUpdate();
+        st.textContent = "";
+      } catch (e) {
+        st.textContent = e?.message || String(e);
+      } finally {
+        btn.disabled = false;
+      }
+    };
     document.getElementById("closeSettings").onclick = () => api.closeSettings();
 
     refresh();

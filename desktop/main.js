@@ -21,6 +21,7 @@ import {
   setPrefs,
 } from "../downloader/server.js";
 import { STRINGS, normalizeLang, t } from "./i18n.js";
+import { checkLatestRelease, downloadAndInstall } from "./updater.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -40,6 +41,7 @@ let quitting = false;
 let extPaths = { chromeExt: "", firefoxExt: "" };
 /** @type {{ lang: string }} */
 let prefs = { lang: "tr" };
+let updateBusy = false;
 
 async function loadPrefs() {
   try {
@@ -189,6 +191,9 @@ async function main() {
     showSettings();
     return true;
   });
+  ipcMain.handle("update:check", async (_e, opts = {}) => {
+    return runUpdateCheck({ silent: !!opts.silent, manual: true });
+  });
 
   const flag = path.join(DATA_DIR, "setup-done");
   if (!fs.existsSync(flag)) {
@@ -200,6 +205,101 @@ async function main() {
 
   refreshTrayTitle();
   setInterval(refreshTrayTitle, 2000);
+
+  // Her açılışta GitHub Releases kontrolü (UI otursun diye kısa gecikme)
+  setTimeout(() => {
+    runUpdateCheck({ silent: true, manual: false }).catch((e) =>
+      console.warn("[update]", e?.message || e)
+    );
+  }, 2500);
+}
+
+/**
+ * @param {{ silent?: boolean, manual?: boolean }} opts
+ * silent: güncelleme yoksa / ağ hatasında sus (açılış için)
+ * manual: Ayarlar/tepsi — sonuç her zaman göster
+ */
+async function runUpdateCheck({ silent = false, manual = false } = {}) {
+  if (updateBusy) return { ok: false, busy: true };
+  updateBusy = true;
+  const L = prefs.lang;
+  const current = app.getVersion();
+  try {
+    let release;
+    try {
+      release = await checkLatestRelease(current);
+    } catch (e) {
+      if (e?.message === "NO_SETUP_ASSET" || e?.version) {
+        if (manual || !silent) {
+          await dialog.showMessageBox({
+            type: "warning",
+            title: t(L, "updateErrorTitle"),
+            message: t(L, "updateNoAsset", { latest: e.version || "?" }),
+            buttons: [t(L, "updateOk")],
+          });
+        }
+        return { ok: false, error: "NO_SETUP_ASSET", version: e.version };
+      }
+      if (manual) {
+        await dialog.showMessageBox({
+          type: "error",
+          title: t(L, "updateErrorTitle"),
+          message: t(L, "updateErrorBody", { error: e?.message || String(e) }),
+          buttons: [t(L, "updateOk")],
+        });
+      }
+      return { ok: false, error: e?.message || String(e) };
+    }
+
+    if (!release) {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: "info",
+          title: t(L, "updateNoneTitle"),
+          message: t(L, "updateNoneBody", { current }),
+          buttons: [t(L, "updateOk")],
+        });
+      }
+      return { ok: true, upToDate: true, current };
+    }
+
+    const choice = await dialog.showMessageBox({
+      type: "info",
+      title: t(L, "updateAvailableTitle"),
+      message: t(L, "updateAvailableBody", {
+        latest: release.version,
+        current,
+      }),
+      detail: release.notes || undefined,
+      buttons: [t(L, "updateYes"), t(L, "updateLater")],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (choice.response !== 0) {
+      return { ok: true, skipped: true, version: release.version };
+    }
+
+    const progress = { pct: 0 };
+    // Basit ilerleme: her %10’da bir log; dialog donmasın diye ayrı await
+    await downloadAndInstall(release, (pct) => {
+      progress.pct = pct;
+      if (pct % 20 === 0) {
+        console.log(`[update] ${pct}%`);
+      }
+    });
+
+    quitting = true;
+    try {
+      await stopDownloader();
+    } catch {
+      /* ignore */
+    }
+    app.quit();
+    return { ok: true, installing: true, version: release.version };
+  } finally {
+    updateBusy = false;
+  }
 }
 
 function findBrowserExe(browser) {
@@ -251,6 +351,12 @@ function rebuildTrayMenu() {
       {
         label: t(L, "trayDownloads"),
         click: () => shell.openPath(getDownloadDir()),
+      },
+      {
+        label: t(L, "trayCheckUpdate"),
+        click: () => {
+          runUpdateCheck({ silent: false, manual: true }).catch(() => {});
+        },
       },
       { type: "separator" },
       {
@@ -342,7 +448,7 @@ function showSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 440,
-    height: 560,
+    height: 640,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#12141a",
