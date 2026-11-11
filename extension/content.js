@@ -176,9 +176,9 @@
       </div>
     `;
 
-    // YouTube vb. sayfa tıklamalarını yutmasın / menüyü kapamasın
+    // Bubble fazında durdur: capture=true çocuk butonlara tıklamayı engelliyordu
     for (const ev of ["mousedown", "mouseup", "click", "pointerdown", "pointerup", "touchstart", "touchend"]) {
-      panel.addEventListener(ev, (e) => e.stopPropagation(), true);
+      panel.addEventListener(ev, (e) => e.stopPropagation(), false);
     }
 
     panel.querySelector('[data-act="toggle"]').addEventListener("click", (e) => {
