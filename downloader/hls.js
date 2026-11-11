@@ -36,12 +36,16 @@ export async function probeHls(masterUrl, { headers = {} } = {}) {
           label: "Tek akış",
           bandwidth: 0,
           resolution: "",
+          height: 0,
           url: masterUrl,
           auto: true,
+          durationSec: 0,
+          estimatedBytes: 0,
         },
       ],
       audios: [],
       autoId: "media",
+      durationSec: 0,
     };
   }
 
@@ -49,8 +53,34 @@ export async function probeHls(masterUrl, { headers = {} } = {}) {
   const qualities = parseVariants(masterText, masterUrl);
   if (!qualities.length) throw new Error("HLS varyant bulunamadı");
   const auto = qualities[0];
-  for (const q of qualities) q.auto = q.id === auto.id;
-  return { master: true, qualities, audios, autoId: auto.id };
+
+  // Süre bir varyanttan; boyut = bandwidth × süre
+  let durationSec = 0;
+  try {
+    durationSec = await mediaPlaylistDuration(auto.url, headers);
+  } catch {
+    durationSec = 0;
+  }
+
+  for (const q of qualities) {
+    q.auto = q.id === auto.id;
+    q.durationSec = durationSec;
+    q.estimatedBytes =
+      q.bandwidth > 0 && durationSec > 0
+        ? Math.round((q.bandwidth * durationSec) / 8)
+        : 0;
+    const resLabel = q.height ? `${q.height}p` : q.resolution || q.label;
+    const sizeLabel = q.estimatedBytes ? ` · ~${formatBytes(q.estimatedBytes)}` : "";
+    const bwLabel = q.bandwidth ? ` · ${formatBw(q.bandwidth)}` : "";
+    q.label = `${resLabel}${sizeLabel}${bwLabel}`;
+  }
+  return {
+    master: true,
+    qualities,
+    audios,
+    autoId: auto.id,
+    durationSec,
+  };
 }
 
 export async function downloadHls(
@@ -500,6 +530,28 @@ function formatBw(bps) {
   if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
   if (bps >= 1000) return `${Math.round(bps / 1000)} kbps`;
   return `${bps} bps`;
+}
+
+function formatBytes(n) {
+  if (!n || n <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(i >= 2 ? 2 : 0)} ${units[i]}`;
+}
+
+async function mediaPlaylistDuration(url, headers = {}) {
+  const text = await fetchText(url, headers);
+  let dur = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^#EXTINF:([\d.]+)/);
+    if (m) dur += Number(m[1]) || 0;
+  }
+  return dur;
 }
 
 function sleep(ms) {

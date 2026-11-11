@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { downloadHls, probeHls, remuxFiles } from "./hls.js";
 import { downloadFile } from "./file.js";
@@ -9,23 +10,26 @@ import { downloadFile } from "./file.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PORT = Number(process.env.VIDSNIFF_PORT || 17890);
+const STABLE_PREFS = path.join(
+  process.env.LOCALAPPDATA || os.homedir(),
+  "VidSniff",
+  "prefs.json"
+);
+
+function defaultDownloadsFolder() {
+  const home = process.env.USERPROFILE || os.homedir();
+  return path.join(home, "Downloads");
+}
 
 function resolveDownloadDir() {
   if (process.env.VIDSNIFF_DOWNLOAD_DIR) return process.env.VIDSNIFF_DOWNLOAD_DIR;
-  // Paketli Electron (asar) içine yazılamaz
-  if (__dirname.includes(".asar") || process.env.PORTABLE_EXECUTABLE_DIR) {
-    const base =
-      process.env.LOCALAPPDATA ||
-      process.env.USERPROFILE ||
-      process.cwd();
-    return path.join(base, "VidSniff", "downloads");
-  }
-  return path.join(ROOT, "downloads");
+  return defaultDownloadsFolder();
 }
 
 let DOWNLOAD_DIR = resolveDownloadDir();
-/** @type {{ lang?: string }} */
-let PREFS = { lang: "tr" };
+let PREFS_PATH = STABLE_PREFS;
+/** @type {{ lang?: string, downloadDir?: string, quality?: string }} */
+let PREFS = { lang: "tr", quality: "auto" };
 
 /** @type {Map<string, object>} */
 const jobs = new Map();
@@ -38,14 +42,37 @@ export function setPrefs(next = {}) {
 }
 
 export function getPrefs() {
-  return { ...PREFS };
+  return { ...PREFS, downloadDir: DOWNLOAD_DIR };
+}
+
+export async function setDownloadDir(dir) {
+  if (!dir) return DOWNLOAD_DIR;
+  DOWNLOAD_DIR = path.resolve(String(dir));
+  await fsp.mkdir(DOWNLOAD_DIR, { recursive: true });
+  PREFS.downloadDir = DOWNLOAD_DIR;
+  try {
+    await fsp.mkdir(path.dirname(PREFS_PATH), { recursive: true });
+    let raw = {};
+    try {
+      raw = JSON.parse(await fsp.readFile(PREFS_PATH, "utf8"));
+    } catch {
+      /* ignore */
+    }
+    await fsp.writeFile(
+      PREFS_PATH,
+      JSON.stringify({ ...raw, downloadDir: DOWNLOAD_DIR }, null, 2),
+      "utf8"
+    );
+  } catch {
+    /* ignore */
+  }
+  return DOWNLOAD_DIR;
 }
 
 function loadPrefsFromDisk() {
   try {
-    const prefsPath = path.join(path.dirname(DOWNLOAD_DIR), "prefs.json");
-    if (fs.existsSync(prefsPath)) {
-      const raw = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+    if (fs.existsSync(PREFS_PATH)) {
+      const raw = JSON.parse(fs.readFileSync(PREFS_PATH, "utf8"));
       if (raw && typeof raw === "object") PREFS = { ...PREFS, ...raw };
     }
   } catch {
@@ -61,12 +88,15 @@ export function getDownloadDir() {
   return DOWNLOAD_DIR;
 }
 
-export async function startDownloader({ port = PORT, downloadDir, prefs } = {}) {
-  if (downloadDir) DOWNLOAD_DIR = downloadDir;
-  else DOWNLOAD_DIR = resolveDownloadDir();
-  await fsp.mkdir(DOWNLOAD_DIR, { recursive: true });
+export async function startDownloader({ port = PORT, downloadDir, prefs, prefsPath } = {}) {
+  if (prefsPath) PREFS_PATH = prefsPath;
   loadPrefsFromDisk();
   if (prefs) setPrefs(prefs);
+  if (downloadDir) DOWNLOAD_DIR = downloadDir;
+  else if (PREFS.downloadDir) DOWNLOAD_DIR = PREFS.downloadDir;
+  else DOWNLOAD_DIR = resolveDownloadDir();
+  await fsp.mkdir(DOWNLOAD_DIR, { recursive: true });
+  PREFS.downloadDir = DOWNLOAD_DIR;
 
   if (server?.listening) {
     return { server, port, downloadDir: DOWNLOAD_DIR, jobs };
@@ -94,6 +124,34 @@ export async function startDownloader({ port = PORT, downloadDir, prefs } = {}) 
 
       if (req.method === "GET" && url.pathname === "/prefs") {
         loadPrefsFromDisk();
+        return json(res, 200, getPrefs());
+      }
+
+      if (req.method === "POST" && url.pathname === "/prefs") {
+        const body = await readJson(req);
+        if (body?.downloadDir) await setDownloadDir(body.downloadDir);
+        if (body?.lang || body?.quality) {
+          setPrefs({
+            ...(body.lang ? { lang: body.lang } : {}),
+            ...(body.quality ? { quality: body.quality } : {}),
+          });
+          try {
+            let raw = {};
+            try {
+              raw = JSON.parse(await fsp.readFile(PREFS_PATH, "utf8"));
+            } catch {
+              /* ignore */
+            }
+            await fsp.mkdir(path.dirname(PREFS_PATH), { recursive: true });
+            await fsp.writeFile(
+              PREFS_PATH,
+              JSON.stringify({ ...raw, ...getPrefs() }, null, 2),
+              "utf8"
+            );
+          } catch {
+            /* ignore */
+          }
+        }
         return json(res, 200, getPrefs());
       }
 
@@ -140,12 +198,17 @@ export async function startDownloader({ port = PORT, downloadDir, prefs } = {}) 
 
         const id = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         let filename = sanitize(body.filename || guessName(body.url, body.type));
-        // IDM gibi doğrudan .mp4 adı
-        if (body.type === "hls" || /\.m3u8(\?|#|$)/i.test(body.url) || /master\.txt/i.test(body.url)) {
-          filename = filename.replace(/\.(m3u8|txt|ts)$/i, "") + ".mp4";
+        // HLS / film → tek .mp4 (çift uzantı yok: film.mp4.mp4)
+        if (
+          body.type === "hls" ||
+          /\.m3u8(\?|#|$)/i.test(body.url) ||
+          /master\.txt/i.test(body.url) ||
+          /\/hls\//i.test(body.url)
+        ) {
+          filename = ensureMp4(filename);
         }
         const outPath = uniquePath(path.join(DOWNLOAD_DIR, filename));
-        const quality = body.quality || "auto";
+        const quality = body.quality || PREFS.quality || "auto";
 
         const job = {
           id,
@@ -157,6 +220,8 @@ export async function startDownloader({ port = PORT, downloadDir, prefs } = {}) 
           status: "running",
           progress: 0,
           error: null,
+          estimatedBytes: Number(body.estimatedBytes) || 0,
+          bytesDone: 0,
           startedAt: Date.now(),
           finishedAt: null,
         };
@@ -232,6 +297,14 @@ async function runJob(job, headers) {
     job.status = "done";
     job.progress = 100;
     job.finishedAt = Date.now();
+    try {
+      if (job.path && fs.existsSync(job.path)) {
+        job.bytesDone = fs.statSync(job.path).size;
+        if (!job.estimatedBytes) job.estimatedBytes = job.bytesDone;
+      }
+    } catch {
+      /* ignore */
+    }
     console.log(`[done] ${job.path}`);
   } catch (e) {
     job.status = "error";
@@ -289,6 +362,15 @@ function normalizeHeaders(input) {
 function sanitize(name) {
   const base = String(name || "video.mp4").replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").slice(0, 160);
   return base || "video.mp4";
+}
+
+/** film.mp4 / film.m3u8 / film → film.mp4 (asla film.mp4.mp4 değil) */
+function ensureMp4(name) {
+  const stem = String(name || "video")
+    .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
+    .replace(/\.+$/, "")
+    .trim() || "video";
+  return `${stem}.mp4`;
 }
 
 function guessName(url, type) {

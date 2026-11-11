@@ -164,6 +164,7 @@
       <div class="vs-menu" hidden>
         <div class="vs-title" data-act="title">${tt("video")}</div>
         <div class="vs-meta" data-act="meta">MP4</div>
+        <select class="vs-quality" data-act="quality" hidden></select>
         <button type="button" class="vs-dl" data-act="download">${tt("downloadAsMp4")}</button>
         <div class="vs-status" data-act="status" hidden></div>
       </div>
@@ -174,7 +175,12 @@
       e.stopPropagation();
       menuOpen = !menuOpen;
       panel.querySelector(".vs-menu").hidden = !menuOpen;
-      if (menuOpen) refreshPrimary();
+      if (menuOpen) {
+        refreshPrimary().then(() => loadQualities());
+      }
+    });
+    panel.querySelector('[data-act="quality"]')?.addEventListener("change", () => {
+      updatePanelLabel();
     });
     panel.querySelector('[data-act="close"]').addEventListener("click", (e) => {
       e.preventDefault();
@@ -192,13 +198,68 @@
     return panel;
   }
 
+  function ensureMp4Name(name) {
+    const stem = String(name || "video")
+      .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
+      .replace(/\.+$/, "")
+      .trim() || "video";
+    return `${stem}.mp4`;
+  }
+
+  let qualitiesCache = [];
+  let qualitiesUrl = "";
+
+  async function loadQualities() {
+    if (!panel || !primary?.url) return;
+    const sel = panel.querySelector('[data-act="quality"]');
+    if (!sel) return;
+    const isHls =
+      primary.type === "hls" ||
+      /\/hls\//i.test(primary.url) ||
+      /\.m3u8|master\.txt/i.test(primary.url);
+    if (!isHls) {
+      sel.hidden = true;
+      qualitiesCache = [];
+      return;
+    }
+    if (qualitiesUrl === primary.url && qualitiesCache.length) {
+      sel.hidden = false;
+      return;
+    }
+    sel.hidden = false;
+    sel.innerHTML = `<option value="auto">…</option>`;
+    try {
+      const probe = await chrome.runtime.sendMessage({
+        type: "PROBE",
+        url: primary.url,
+        headers: primary.requestHeaders || {},
+      });
+      qualitiesCache = probe?.ok && probe.qualities?.length
+        ? [{ id: "auto", label: "Auto", estimatedBytes: probe.qualities[0]?.estimatedBytes || 0 }, ...probe.qualities]
+        : [{ id: "auto", label: "Auto", estimatedBytes: 0 }];
+      qualitiesUrl = primary.url;
+      sel.innerHTML = qualitiesCache
+        .map((q) => `<option value="${q.id}">${q.label}</option>`)
+        .join("");
+      updatePanelLabel();
+    } catch {
+      sel.hidden = true;
+    }
+  }
+
   function updatePanelLabel() {
     if (!panel) return;
     const title = primary?.displayName || primary?.filename || document.title || tt("video");
-    const clean = String(title).replace(/\.(m3u8|txt|ts)$/i, ".mp4");
+    const clean = ensureMp4Name(title);
     panel.querySelector('[data-act="title"]').textContent = clean;
+    const sel = panel.querySelector('[data-act="quality"]');
+    const q = qualitiesCache.find((x) => x.id === (sel?.value || "auto"));
+    const size =
+      q?.estimatedBytes > 0
+        ? ` · ~${(q.estimatedBytes / (1024 * 1024)).toFixed(0)} MB`
+        : "";
     panel.querySelector('[data-act="meta"]').textContent = primary
-      ? tt("mp4Best")
+      ? `${tt("mp4Best")}${size}`
       : tt("waitingCapture");
     panel.querySelector('[data-act="label"]').textContent = tt("download");
     const closeBtn = panel.querySelector('[data-act="close"]');
@@ -251,11 +312,15 @@
         status.textContent = tt("playFirst");
         return;
       }
+      const sel = panel.querySelector('[data-act="quality"]');
+      const qid = sel?.value || "auto";
+      const q = qualitiesCache.find((x) => x.id === qid);
       const result = await chrome.runtime.sendMessage({
         type: "DOWNLOAD",
-        item: primary,
+        item: { ...primary, estimatedBytes: q?.estimatedBytes || 0 },
         mode: "auto",
-        quality: "auto",
+        quality: qid,
+        estimatedBytes: q?.estimatedBytes || 0,
       });
       if (result?.ok) {
         status.className = "vs-status ok";

@@ -245,7 +245,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     if (msg?.type === "DOWNLOAD") {
-      const result = await downloadItem(msg.item, msg.mode || "auto", msg.quality || "auto");
+      const item = {
+        ...(msg.item || {}),
+        estimatedBytes: msg.estimatedBytes ?? msg.item?.estimatedBytes,
+      };
+      const result = await downloadItem(item, msg.mode || "auto", msg.quality || "auto");
       sendResponse(result);
       return;
     }
@@ -751,6 +755,7 @@ async function companionDownload(item, headers, quality) {
         filename,
         type: item.type === "video" && /\/hls\//i.test(item.url) ? "hls" : item.type,
         quality: quality || "auto",
+        estimatedBytes: Number(item.estimatedBytes) || 0,
         audioUrls,
         headers,
         verify: true,

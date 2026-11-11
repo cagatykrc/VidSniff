@@ -100,12 +100,23 @@ export function guessFilename(url, contentType = "", pageTitle = "") {
   return `${title || `video_${Date.now()}`}.${ext}`;
 }
 
+export function ensureMp4Name(name) {
+  const stem = String(name || "video")
+    .replace(/\.(m3u8|txt|ts|mp4|m4a|mkv|webm)$/i, "")
+    .replace(/\.+$/, "")
+    .trim() || "video";
+  return `${stem}.mp4`;
+}
+
 export function displayLabel(item) {
-  if (item.type === "hls" && (/master/i.test(item.filename || "") || item.hlsKind === "master" || /master\.(txt|m3u8)/i.test(item.url || ""))) {
-    return item.filename?.endsWith(".mp4") ? item.filename : `${(item.filename || "video").replace(/\.[^.]+$/, "")}.mp4`;
-  }
-  if (item.type === "hls" && /\/hls\//i.test(item.url || "") && !/aud|audio|sublist/i.test(item.url || "")) {
-    return (item.filename || "video.mp4").replace(/\.(m3u8|txt)$/i, ".mp4");
+  const raw = item.displayName || item.filename || item.pageTitle || "video";
+  if (
+    item.type === "hls" ||
+    item.hlsKind === "master" ||
+    /master\.(txt|m3u8)/i.test(item.url || "") ||
+    (/\/hls\//i.test(item.url || "") && !/aud|audio|sublist/i.test(item.url || ""))
+  ) {
+    return ensureMp4Name(raw);
   }
   return item.filename || "media";
 }

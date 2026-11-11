@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("vidsniffSetup", {
     ipcRenderer.invoke("setup:openBrowserExtensions", browser),
   runGuide: (browser) => ipcRenderer.invoke("setup:runGuide", browser),
   openDownloads: () => ipcRenderer.invoke("setup:openDownloads"),
+  pickDownloadDir: () => ipcRenderer.invoke("setup:pickDownloadDir"),
+  resetDownloadDir: () => ipcRenderer.invoke("setup:resetDownloadDir"),
   setAutostart: (enabled) => ipcRenderer.invoke("setup:autostart", enabled),
   close: () => ipcRenderer.invoke("setup:close"),
   closeSettings: () => ipcRenderer.invoke("settings:close"),

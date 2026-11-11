@@ -1,4 +1,5 @@
 import { t, syncLangFromService } from "./lib/i18n.js";
+import { formatBytes, ensureMp4Name } from "./lib/media.js";
 
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
@@ -6,11 +7,16 @@ const jobsEl = document.getElementById("jobs");
 const primaryEl = document.getElementById("primary");
 const dlPrimaryBtn = document.getElementById("dlPrimary");
 const primaryMsg = document.getElementById("primaryMsg");
+const qualityRow = document.getElementById("qualityRow");
+const qualitySelect = document.getElementById("qualitySelect");
 
 /** @type {object[]} */
 let serverJobs = [];
 /** @type {object | null} */
 let primaryItem = null;
+/** @type {object[]} */
+let qualities = [];
+let probeUrl = "";
 
 document.getElementById("dlPrimary").addEventListener("click", () => downloadPrimary());
 
@@ -23,17 +29,26 @@ function applyStatic() {
 
 function prettyName(item) {
   if (!item) return t("video");
-  const url = item.url || "";
   const fn = item.displayName || item.filename || item.pageTitle || "video";
-  if (/master\.(txt|m3u8)/i.test(url) || item.hlsKind === "master" || /\/hls\//i.test(url)) {
-    const base = String(fn).replace(/\.(m3u8|txt|ts)$/i, "");
-    return base.endsWith(".mp4") ? base : `${base}.mp4`;
+  if (
+    /master\.(txt|m3u8)/i.test(item.url || "") ||
+    item.hlsKind === "master" ||
+    /\/hls\//i.test(item.url || "") ||
+    item.type === "hls"
+  ) {
+    return ensureMp4Name(fn);
   }
   return fn;
 }
 
 function basename(p) {
   return String(p || "").split(/[/\\]/).pop() || "file";
+}
+
+function selectedQuality() {
+  const id = qualitySelect?.value || "auto";
+  const q = qualities.find((x) => x.id === id);
+  return { id, estimatedBytes: q?.estimatedBytes || 0, label: q?.label || id };
 }
 
 async function load() {
@@ -47,6 +62,7 @@ async function load() {
   const prim = await chrome.runtime.sendMessage({ type: "GET_PRIMARY" });
   primaryItem = prim?.item || null;
   renderPrimary(!!(prim?.downloaderOnline ?? jobsRes?.downloaderOnline));
+  if (primaryItem) await ensureProbe(primaryItem);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const res = await chrome.runtime.sendMessage({ type: "GET_ITEMS", tabId: tab?.id ?? -1 });
@@ -58,6 +74,68 @@ function isNoise(it) {
   return /site\.webm|sublist_aud|\/aud\d|sprite|thumbnail/i.test(u);
 }
 
+async function ensureProbe(item) {
+  if (!item?.url) return;
+  const isHls =
+    item.type === "hls" ||
+    /\/hls\//i.test(item.url) ||
+    /\.m3u8|master\.txt/i.test(item.url);
+  if (!isHls) {
+    qualityRow.hidden = true;
+    qualities = [];
+    return;
+  }
+  if (probeUrl === item.url && qualities.length) {
+    qualityRow.hidden = false;
+    return;
+  }
+  qualityRow.hidden = false;
+  qualitySelect.innerHTML = `<option value="auto">${t("probing")}</option>`;
+  const headers = item.requestHeaders || {};
+  const probe = await chrome.runtime.sendMessage({
+    type: "PROBE",
+    url: item.url,
+    headers,
+  });
+  if (!probe?.ok || !probe.qualities?.length) {
+    qualities = [{ id: "auto", label: t("qualityAuto"), estimatedBytes: 0 }];
+  } else {
+    qualities = [
+      {
+        id: "auto",
+        label: t("qualityAuto"),
+        estimatedBytes: probe.qualities[0]?.estimatedBytes || 0,
+      },
+      ...probe.qualities,
+    ];
+    probeUrl = item.url;
+  }
+  qualitySelect.innerHTML = qualities
+    .map((q) => `<option value="${escapeAttr(q.id)}">${escapeHtml(q.label)}</option>`)
+    .join("");
+  renderPrimaryMeta();
+}
+
+function renderPrimaryMeta() {
+  if (!primaryItem) return;
+  const sel = selectedQuality();
+  const size =
+    sel.estimatedBytes > 0
+      ? t("sizeApprox", { size: formatBytes(sel.estimatedBytes) })
+      : primaryItem.size > 0
+        ? formatBytes(primaryItem.size)
+        : null;
+  primaryEl.querySelector(".p-meta").textContent = [
+    "MP4",
+    primaryItem.hlsKind === "master" || primaryItem.type === "hls" ? "HLS→MP4" : primaryItem.type,
+    size,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+qualitySelect?.addEventListener("change", () => renderPrimaryMeta());
+
 function renderPrimary(online) {
   statusEl.textContent = online ? t("serviceOn") : t("serviceOff");
   statusEl.className = `status ${online ? "online" : "offline"}`;
@@ -68,6 +146,7 @@ function renderPrimary(online) {
     primaryEl.querySelector(".p-meta").textContent = t("emptyPrimaryMeta");
     dlPrimaryBtn.disabled = true;
     dlPrimaryBtn.textContent = t("mp4Download");
+    qualityRow.hidden = true;
     return;
   }
 
@@ -75,13 +154,7 @@ function renderPrimary(online) {
   const name = prettyName(primaryItem);
   primaryEl.className = "primary";
   primaryEl.querySelector(".p-title").textContent = name;
-  primaryEl.querySelector(".p-meta").textContent = [
-    "MP4",
-    primaryItem.hlsKind === "master" ? "HLS→MP4" : primaryItem.type,
-    job?.status === "running" ? `%${Math.round(job.progress || 0)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  renderPrimaryMeta();
 
   dlPrimaryBtn.disabled = job?.status === "running" || !online;
   dlPrimaryBtn.textContent =
@@ -90,7 +163,8 @@ function renderPrimary(online) {
   if (job?.status === "done") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg ok";
-    primaryMsg.textContent = t("complete", { name: basename(job.path) });
+    const sz = job.bytesDone ? ` · ${formatBytes(job.bytesDone)}` : "";
+    primaryMsg.textContent = t("complete", { name: basename(job.path) }) + sz;
   } else if (job?.status === "error") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg err";
@@ -98,7 +172,8 @@ function renderPrimary(online) {
   } else if (job?.status === "running") {
     primaryMsg.hidden = false;
     primaryMsg.className = "msg";
-    primaryMsg.textContent = `${t("downloadingEllipsis")} %${Math.round(job.progress || 0)}`;
+    const est = job.estimatedBytes ? ` / ~${formatBytes(job.estimatedBytes)}` : "";
+    primaryMsg.textContent = `${t("downloadingEllipsis")} %${Math.round(job.progress || 0)}${est}`;
   } else {
     primaryMsg.hidden = true;
   }
@@ -106,6 +181,7 @@ function renderPrimary(online) {
 
 async function downloadPrimary() {
   if (!primaryItem) return;
+  const sel = selectedQuality();
   dlPrimaryBtn.disabled = true;
   dlPrimaryBtn.textContent = "...";
   primaryMsg.hidden = false;
@@ -113,9 +189,10 @@ async function downloadPrimary() {
   primaryMsg.textContent = t("startMp4");
   const result = await chrome.runtime.sendMessage({
     type: "DOWNLOAD",
-    item: primaryItem,
+    item: { ...primaryItem, estimatedBytes: sel.estimatedBytes },
     mode: "auto",
-    quality: "auto",
+    quality: sel.id || "auto",
+    estimatedBytes: sel.estimatedBytes,
   });
   if (!result?.ok) {
     primaryMsg.className = "msg err";
@@ -146,11 +223,15 @@ function renderJobsBar() {
       .map((job) => {
         const pct = Math.round(job.progress || 0);
         const cls = job.status === "done" ? "ok" : job.status === "error" ? "err" : "run";
+        const sizeBit =
+          job.bytesDone || job.estimatedBytes
+            ? ` · ${formatBytes(job.bytesDone || job.estimatedBytes)}`
+            : "";
         const label =
           job.status === "running"
-            ? `%${pct}`
+            ? `%${pct}${sizeBit}`
             : job.status === "done"
-              ? t("jobDone")
+              ? `${t("jobDone")}${sizeBit}`
               : t("jobError");
         return `<div class="job-row ${cls}">
           <div class="job-name">${escapeHtml(basename(job.path) || job.id)}</div>
@@ -179,12 +260,18 @@ function renderList(items) {
   for (const item of items.slice(0, 20)) {
     const row = document.createElement("div");
     row.className = "mini-row";
+    const size = item.size > 1024 ? ` · ${formatBytes(item.size)}` : "";
     row.innerHTML = `
-      <div class="mini-name" title="${escapeAttr(item.url)}">${escapeHtml(prettyName(item))}</div>
+      <div class="mini-name" title="${escapeAttr(item.url)}">${escapeHtml(prettyName(item))}${escapeHtml(size)}</div>
       <button type="button" class="ghost mini" data-act="dl">${escapeHtml(t("download"))}</button>
     `;
     row.querySelector('[data-act="dl"]').addEventListener("click", async () => {
-      await chrome.runtime.sendMessage({ type: "DOWNLOAD", item, mode: "auto", quality: "auto" });
+      await chrome.runtime.sendMessage({
+        type: "DOWNLOAD",
+        item,
+        mode: "auto",
+        quality: "auto",
+      });
       await load();
     });
     listEl.appendChild(row);
@@ -203,4 +290,4 @@ function escapeAttr(s) {
 }
 
 load();
-setInterval(load, 1500);
+setInterval(load, 2000);

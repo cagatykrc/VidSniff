@@ -32,6 +32,10 @@ const STRINGS = {
     footerHint: "The orange player panel does the same job",
     jobDone: "done",
     jobError: "error",
+    quality: "Quality",
+    qualityAuto: "Auto (best)",
+    sizeApprox: "~{size}",
+    probing: "Reading qualities…",
   },
   tr: {
     download: "İndir",
@@ -64,6 +68,10 @@ const STRINGS = {
     footerHint: "Oynatıcıdaki turuncu panel de aynı işi yapar",
     jobDone: "tamam",
     jobError: "hata",
+    quality: "Çözünürlük",
+    qualityAuto: "Otomatik (en iyi)",
+    sizeApprox: "~{size}",
+    probing: "Kaliteler okunuyor…",
   },
 };
 

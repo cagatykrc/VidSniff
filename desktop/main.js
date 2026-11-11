@@ -19,6 +19,7 @@ import {
   getDownloadDir,
   getJobs,
   setPrefs,
+  setDownloadDir,
 } from "../downloader/server.js";
 import { STRINGS, normalizeLang, t } from "./i18n.js";
 import { checkLatestRelease, downloadAndInstall } from "./updater.js";
@@ -39,17 +40,28 @@ let setupWin = null;
 let settingsWin = null;
 let quitting = false;
 let extPaths = { chromeExt: "", firefoxExt: "" };
-/** @type {{ lang: string }} */
-let prefs = { lang: "tr" };
+/** @type {{ lang: string, downloadDir?: string, quality?: string }} */
+let prefs = { lang: "tr", quality: "auto" };
 let updateBusy = false;
+
+function defaultDownloadDir() {
+  try {
+    return app.getPath("downloads");
+  } catch {
+    return path.join(process.env.USERPROFILE || "", "Downloads");
+  }
+}
 
 async function loadPrefs() {
   try {
     const raw = JSON.parse(await fsp.readFile(PREFS_PATH, "utf8"));
     if (raw?.lang) prefs.lang = normalizeLang(raw.lang);
+    if (raw?.downloadDir) prefs.downloadDir = String(raw.downloadDir);
+    if (raw?.quality) prefs.quality = String(raw.quality);
   } catch {
     prefs.lang = normalizeLang(app.getLocale());
   }
+  if (!prefs.downloadDir) prefs.downloadDir = defaultDownloadDir();
 }
 
 async function savePrefs() {
@@ -121,14 +133,21 @@ async function main() {
   await loadPrefs();
   extPaths = await ensureStableExtensions();
 
-  const downloadDir = path.join(STABLE_DIR, "downloads");
+  const downloadDir = prefs.downloadDir || defaultDownloadDir();
+  prefs.downloadDir = downloadDir;
   try {
-    await startDownloader({ downloadDir, prefs });
+    await startDownloader({ downloadDir, prefs, prefsPath: PREFS_PATH });
   } catch (e) {
     if (e?.code !== "EADDRINUSE") throw e;
     console.log("Servis zaten açık (17890)");
     setPrefs(prefs);
+    try {
+      await setDownloadDir(downloadDir);
+    } catch {
+      /* ignore */
+    }
   }
+  await savePrefs();
 
   const image = nativeImage.createFromPath(ICON);
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
@@ -144,10 +163,29 @@ async function main() {
   ipcMain.handle("setup:paths", () => ({
     ...extPaths,
     openAtLogin: app.getLoginItemSettings().openAtLogin,
-    downloadDir: getDownloadDir(),
+    downloadDir: getDownloadDir() || prefs.downloadDir || defaultDownloadDir(),
     version: app.getVersion(),
     lang: prefs.lang,
+    quality: prefs.quality || "auto",
   }));
+  ipcMain.handle("setup:pickDownloadDir", async () => {
+    const res = await dialog.showOpenDialog({
+      title: t(prefs.lang, "settingsPickFolder"),
+      properties: ["openDirectory", "createDirectory"],
+      defaultPath: getDownloadDir() || defaultDownloadDir(),
+    });
+    if (res.canceled || !res.filePaths?.[0]) return { ok: false };
+    prefs.downloadDir = res.filePaths[0];
+    await setDownloadDir(prefs.downloadDir);
+    await savePrefs();
+    return { ok: true, downloadDir: prefs.downloadDir };
+  });
+  ipcMain.handle("setup:resetDownloadDir", async () => {
+    prefs.downloadDir = defaultDownloadDir();
+    await setDownloadDir(prefs.downloadDir);
+    await savePrefs();
+    return { ok: true, downloadDir: prefs.downloadDir };
+  });
   ipcMain.handle("i18n:get", () => ({
     lang: prefs.lang,
     strings: STRINGS[prefs.lang] || STRINGS.en,

@@ -113,10 +113,12 @@
 
   <section class="card">
     <h2 data-i18n="settingsDownloads">Downloads</h2>
-    <p class="hint" data-i18n="settingsDownloadsHint">Files are saved to this folder.</p>
+    <p class="hint" data-i18n="settingsDownloadsHint">Default: your Windows Downloads folder. Change anytime.</p>
     <div class="path" id="downloadPath">…</div>
     <div class="actions">
-      <button class="primary" id="openDownloads" type="button" data-i18n="settingsOpenFolder">Open folder</button>
+      <button class="primary" id="pickDownloads" type="button" data-i18n="settingsPickFolder">Choose folder</button>
+      <button id="openDownloads" type="button" data-i18n="settingsOpenFolder">Open folder</button>
+      <button id="resetDownloads" type="button" data-i18n="settingsResetFolder">Use Downloads</button>
     </div>
   </section>
 
@@ -176,6 +178,14 @@
     };
     document.getElementById("autostart").onchange = (e) => api.setAutostart(e.target.checked);
     document.getElementById("openDownloads").onclick = () => api.openDownloads();
+    document.getElementById("pickDownloads").onclick = async () => {
+      const r = await api.pickDownloadDir();
+      if (r?.ok) await refresh();
+    };
+    document.getElementById("resetDownloads").onclick = async () => {
+      await api.resetDownloadDir();
+      await refresh();
+    };
     document.getElementById("openExtSetup").onclick = () => api.openGuide();
     document.getElementById("checkUpdate").onclick = async () => {
       const st = document.getElementById("updateStatus");

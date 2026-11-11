@@ -40,6 +40,23 @@ function basename(p) {
   return String(p).split(/[/\\]/).pop();
 }
 
+function formatBytes(n) {
+  if (!n || n <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(i >= 2 ? 1 : 0)} ${units[i]}`;
+}
+
+function sizeBit(job) {
+  const n = job.bytesDone || job.estimatedBytes;
+  return n ? ` · ${formatBytes(n)}` : "";
+}
+
 async function load() {
   let jobs = [];
   try {
@@ -74,7 +91,7 @@ function render(jobs) {
       </div>
       <div class="bar"><span style="width:${pct}%"></span></div>
       <div class="meta">
-        <span>${pct}%${job.quality && job.quality !== "auto" ? ` · ${esc(job.quality)}` : " · auto"}</span>
+        <span>${pct}%${job.quality && job.quality !== "auto" ? ` · ${esc(job.quality)}` : " · auto"}${sizeBit(job)}</span>
         <span></span>
       </div>
       ${job.error ? `<div class="err">${esc(job.error)}</div>` : ""}
