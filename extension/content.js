@@ -149,6 +149,9 @@
     return globalThis.VidSniffI18n?.t?.(key) || key;
   }
 
+  let selectedQualityId = "auto";
+  let qualityListOpen = false;
+
   function ensurePanel() {
     if (panel && document.contains(panel)) return panel;
     panel = document.createElement("div");
@@ -164,29 +167,42 @@
       <div class="vs-menu" hidden>
         <div class="vs-title" data-act="title">${tt("video")}</div>
         <div class="vs-meta" data-act="meta">MP4</div>
-        <select class="vs-quality" data-act="quality" hidden></select>
+        <div class="vs-qwrap" data-act="qwrap" hidden>
+          <button type="button" class="vs-quality-btn" data-act="quality-btn">Auto ▾</button>
+          <div class="vs-quality-list" data-act="quality-list" hidden></div>
+        </div>
         <button type="button" class="vs-dl" data-act="download">${tt("downloadAsMp4")}</button>
         <div class="vs-status" data-act="status" hidden></div>
       </div>
     `;
 
+    // YouTube vb. sayfa tıklamalarını yutmasın / menüyü kapamasın
+    for (const ev of ["mousedown", "mouseup", "click", "pointerdown", "pointerup", "touchstart", "touchend"]) {
+      panel.addEventListener(ev, (e) => e.stopPropagation(), true);
+    }
+
     panel.querySelector('[data-act="toggle"]').addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       menuOpen = !menuOpen;
-      panel.querySelector(".vs-menu").hidden = !menuOpen;
+      qualityListOpen = false;
+      syncMenuVisibility();
       if (menuOpen) {
         refreshPrimary().then(() => loadQualities());
       }
     });
-    panel.querySelector('[data-act="quality"]')?.addEventListener("change", () => {
-      updatePanelLabel();
+    panel.querySelector('[data-act="quality-btn"]').addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      qualityListOpen = !qualityListOpen;
+      syncMenuVisibility();
     });
     panel.querySelector('[data-act="close"]').addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       setClosed(true);
       menuOpen = false;
+      qualityListOpen = false;
       hidePanel();
       chrome.runtime.sendMessage({ type: "PANEL_CLOSE" }).catch(() => {});
     });
@@ -196,6 +212,14 @@
       startDownload();
     });
     return panel;
+  }
+
+  function syncMenuVisibility() {
+    if (!panel) return;
+    const menu = panel.querySelector(".vs-menu");
+    const list = panel.querySelector('[data-act="quality-list"]');
+    if (menu) menu.hidden = !menuOpen;
+    if (list) list.hidden = !qualityListOpen;
   }
 
   function ensureMp4Name(name) {
@@ -210,41 +234,88 @@
   let qualitiesCache = [];
   let qualitiesUrl = "";
 
+  function renderQualityList() {
+    if (!panel) return;
+    const wrap = panel.querySelector('[data-act="qwrap"]');
+    const btn = panel.querySelector('[data-act="quality-btn"]');
+    const list = panel.querySelector('[data-act="quality-list"]');
+    if (!wrap || !btn || !list) return;
+    if (!qualitiesCache.length) {
+      wrap.hidden = true;
+      qualityListOpen = false;
+      list.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    const current = qualitiesCache.find((x) => x.id === selectedQualityId) || qualitiesCache[0];
+    selectedQualityId = current?.id || "auto";
+    btn.textContent = `${current?.label || "Auto"} ▾`;
+    // Liste açıksa yeniden basma — tıklanınca kapanmasın
+    if (qualityListOpen && list.childElementCount === qualitiesCache.length) {
+      list.hidden = false;
+      return;
+    }
+    list.innerHTML = "";
+    for (const q of qualitiesCache) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "vs-quality-item" + (q.id === selectedQualityId ? " active" : "");
+      b.textContent = q.label;
+      b.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedQualityId = q.id;
+        qualityListOpen = false;
+        renderQualityList();
+        updatePanelLabel();
+        syncMenuVisibility();
+      });
+      list.appendChild(b);
+    }
+    list.hidden = !qualityListOpen;
+  }
+
   async function loadQualities() {
     if (!panel || !primary?.url) return;
-    const sel = panel.querySelector('[data-act="quality"]');
-    if (!sel) return;
     const isHls =
       primary.type === "hls" ||
       /\/hls\//i.test(primary.url) ||
       /\.m3u8|master\.txt/i.test(primary.url);
     if (!isHls) {
-      sel.hidden = true;
       qualitiesCache = [];
+      renderQualityList();
       return;
     }
     if (qualitiesUrl === primary.url && qualitiesCache.length) {
-      sel.hidden = false;
+      renderQualityList();
       return;
     }
-    sel.hidden = false;
-    sel.innerHTML = `<option value="auto">…</option>`;
     try {
       const probe = await chrome.runtime.sendMessage({
         type: "PROBE",
         url: primary.url,
         headers: primary.requestHeaders || {},
       });
-      qualitiesCache = probe?.ok && probe.qualities?.length
-        ? [{ id: "auto", label: "Auto", estimatedBytes: probe.qualities[0]?.estimatedBytes || 0 }, ...probe.qualities]
-        : [{ id: "auto", label: "Auto", estimatedBytes: 0 }];
+      qualitiesCache =
+        probe?.ok && probe.qualities?.length
+          ? [
+              {
+                id: "auto",
+                label: "Auto",
+                estimatedBytes: probe.qualities[0]?.estimatedBytes || 0,
+              },
+              ...probe.qualities,
+            ]
+          : [{ id: "auto", label: "Auto", estimatedBytes: 0 }];
       qualitiesUrl = primary.url;
-      sel.innerHTML = qualitiesCache
-        .map((q) => `<option value="${q.id}">${q.label}</option>`)
-        .join("");
+      if (!qualitiesCache.some((q) => q.id === selectedQualityId)) {
+        selectedQualityId = "auto";
+      }
+      renderQualityList();
       updatePanelLabel();
     } catch {
-      sel.hidden = true;
+      qualitiesCache = [];
+      renderQualityList();
     }
   }
 
@@ -253,8 +324,7 @@
     const title = primary?.displayName || primary?.filename || document.title || tt("video");
     const clean = ensureMp4Name(title);
     panel.querySelector('[data-act="title"]').textContent = clean;
-    const sel = panel.querySelector('[data-act="quality"]');
-    const q = qualitiesCache.find((x) => x.id === (sel?.value || "auto"));
+    const q = qualitiesCache.find((x) => x.id === selectedQualityId);
     const size =
       q?.estimatedBytes > 0
         ? ` · ~${(q.estimatedBytes / (1024 * 1024)).toFixed(0)} MB`
@@ -270,12 +340,15 @@
     }
     const dl = panel.querySelector('[data-act="download"]');
     if (dl) dl.textContent = tt("downloadAsMp4");
+    const qBtn = panel.querySelector('[data-act="quality-btn"]');
+    if (qBtn && q) qBtn.textContent = `${q.label} ▾`;
   }
 
   function hidePanel() {
     allowedToShow = false;
-    if (panel?.parentElement) panel.parentElement.removeChild(panel);
     menuOpen = false;
+    qualityListOpen = false;
+    if (panel?.parentElement) panel.parentElement.removeChild(panel);
   }
 
   function placePanel() {
@@ -285,17 +358,23 @@
     }
     const { video } = largestVideo();
     if (!video) {
-      // video henüz yoksa biraz bekle; hemen yok etme — aday raporları gelsin
       return;
     }
     const p = ensurePanel();
-    const host = video.parentElement || document.body;
-    const cs = getComputedStyle(host);
-    if (cs.position === "static") host.style.position = "relative";
-    if (p.parentElement !== host) host.appendChild(p);
-    p.style.top = "10px";
-    p.style.right = "10px";
-    if (p.querySelector(".vs-menu")) p.querySelector(".vs-menu").hidden = !menuOpen;
+    // Video parent yerine documentElement + fixed → YouTube overlay altında kalmaz
+    if (p.parentElement !== document.documentElement) {
+      document.documentElement.appendChild(p);
+    }
+    const rect = video.getBoundingClientRect();
+    const top = Math.min(Math.max(8, rect.top + 10), Math.max(8, window.innerHeight - 52));
+    const left = Math.min(
+      Math.max(8, rect.right - 128),
+      Math.max(8, window.innerWidth - 140)
+    );
+    p.style.top = `${Math.round(top)}px`;
+    p.style.left = `${Math.round(left)}px`;
+    p.style.right = "auto";
+    syncMenuVisibility();
     updatePanelLabel();
   }
 
@@ -313,8 +392,7 @@
         status.textContent = tt("playFirst");
         return;
       }
-      const sel = panel.querySelector('[data-act="quality"]');
-      const qid = sel?.value || "auto";
+      const qid = selectedQualityId || "auto";
       const q = qualitiesCache.find((x) => x.id === qid);
       const result = await chrome.runtime.sendMessage({
         type: "DOWNLOAD",
