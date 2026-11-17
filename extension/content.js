@@ -54,11 +54,56 @@
     setTimeout(reportCandidate, 1500);
   }
 
+  function looksLikeMediaUrl(url) {
+    if (!url || url.startsWith("blob:") || url.startsWith("mediasource:") || url.startsWith("data:")) {
+      return false;
+    }
+    return (
+      /\.(m3u8|mpd|mp4|webm|m4v|mov|mkv|mp3|m4a)(?:$|\?|#)/i.test(url) ||
+      /\/hls\/|master\.(txt|m3u8)|playlist\.(m3u8|txt)|index\.m3u8|mpegurl|cdnimages|cdnstatic|playmix/i.test(
+        url
+      ) ||
+      (/master\.txt|\/txt\/master/i.test(url) && /^https?:/i.test(url))
+    );
+  }
+
+  function pushMedia(media, url, extra = {}) {
+    if (!looksLikeMediaUrl(url)) return;
+    // Segment /.ts .m4s listeyi kirletmesin
+    if (/\.(ts|m4s)(?:$|\?|#)/i.test(url) && !/m3u8|master\.txt/i.test(url)) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    media.push({
+      url,
+      contentType: extra.contentType || "",
+      size: extra.size || 0,
+      pageTitle: extra.pageTitle || document.title || "",
+      source: extra.source || "dom",
+    });
+  }
+
+  function harvestUrlsFromText(text, media, source) {
+    if (!text) return;
+    const re = /https?:\/\/[^\s"'<>\\]+/gi;
+    let match;
+    let guard = 0;
+    while ((match = re.exec(text)) && guard < 80) {
+      guard += 1;
+      let url = match[0]
+        .replace(/&amp;/g, "&")
+        .replace(/\\u0026/g, "&")
+        .replace(/\\\//g, "/")
+        .replace(/[),.;\]}]+$/g, "");
+      pushMedia(media, url, { source, pageTitle: document.title || "" });
+    }
+  }
+
   function collect() {
     onNavigateCheck();
     const media = [];
     const title = document.title || "";
 
+    // 1) <video>/<audio> kaynakları
     document.querySelectorAll("video, audio").forEach((el) => {
       const sources = [];
       if (el.currentSrc) sources.push(el.currentSrc);
@@ -67,29 +112,43 @@
         if (s.src) sources.push(s.src);
       });
       for (const url of sources) {
-        if (!url || url.startsWith("blob:") || url.startsWith("mediasource:")) continue;
-        if (seen.has(url)) continue;
-        seen.add(url);
-        media.push({
-          url,
+        pushMedia(media, url, {
           contentType: el.tagName === "AUDIO" ? "audio/*" : "video/*",
-          size: 0,
           pageTitle: title,
+          source: "dom",
         });
       }
     });
 
-    const html = document.documentElement?.innerHTML || "";
-    const re = /https?:\/\/[^"'\\\s<>]+?\.(?:m3u8|mpd|mp4|webm|m4v|mp3|m4a|txt)(?:\?[^"'\\\s<>]*)?/gi;
-    let match;
-    let guard = 0;
-    while ((match = re.exec(html)) && guard < 40) {
-      guard += 1;
-      const url = match[0].replace(/&amp;/g, "&");
-      if (seen.has(url)) continue;
-      if (!/\/hls\/|m3u8|master\.txt/i.test(url) && /\.txt(?:$|\?)/i.test(url)) continue;
-      seen.add(url);
-      media.push({ url, contentType: "", size: 0, pageTitle: title });
+    // 2) Performance timeline — gerçek ağ istekleri (iframe/player)
+    try {
+      for (const e of performance.getEntriesByType("resource")) {
+        pushMedia(media, e.name, {
+          source: "performance",
+          pageTitle: title,
+          size: Number(e.transferSize) || 0,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // 3) Script / JSON gömülü URL'ler
+    document.querySelectorAll("script:not([src])").forEach((sc) => {
+      const t = sc.textContent || "";
+      if (t.length > 500_000) return;
+      if (!/m3u8|mp4|mpd|hls|master\.txt|playlist/i.test(t)) return;
+      harvestUrlsFromText(t, media, "dom");
+    });
+
+    // 4) Sayfa HTML (sınırlı)
+    try {
+      const html = document.documentElement?.innerHTML || "";
+      if (html.length && html.length < 2_000_000) {
+        harvestUrlsFromText(html.slice(0, 400_000), media, "dom");
+      }
+    } catch {
+      /* ignore */
     }
 
     if (media.length) {
@@ -506,6 +565,17 @@
     },
     true
   );
+
+  // Yeni ağ kaynakları geldikçe tara (player lazy-load)
+  try {
+    const po = new PerformanceObserver(() => {
+      window.clearTimeout(po._t);
+      po._t = window.setTimeout(collect, 400);
+    });
+    po.observe({ type: "resource", buffered: true });
+  } catch {
+    /* ignore */
+  }
 
   window.clearInterval(pollTimer);
   pollTimer = window.setInterval(() => {

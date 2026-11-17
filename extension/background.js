@@ -7,6 +7,10 @@ import {
   pickHeader,
   detectHlsKind,
   displayLabel,
+  isNoiseItem,
+  isPrimaryCandidate,
+  scoreItem,
+  streamPathKey,
 } from "./lib/media.js";
 
 const MAX_ITEMS = 80;
@@ -100,7 +104,11 @@ chrome.webRequest.onCompleted.addListener(
     const key = mediaKey(details.url);
     if (reqHeaders.cookie) capturedCookies.set(key, reqHeaders.cookie);
 
-    const hlsKind = type === "hls" ? detectHlsKind(details.url, contentLength) : "";
+    let hlsKind = type === "hls" ? detectHlsKind(details.url, contentLength) : "";
+    // Ses playlist'lerini ayrı tut; primary skorunu kirletmesin
+    if (hlsKind === "audio") {
+      // yine kaydet (mux için) ama type hls kalsın
+    }
 
     const finish = (pageTitle = "") => {
       upsertItem({
@@ -145,14 +153,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             /* ignore */
           }
         }
+        const type = classifyMedia(m.url, m.contentType || "");
+        if (type === "segment") continue;
+        const hlsKind = type === "hls" ? detectHlsKind(m.url, m.size || 0) : "";
         upsertItem({
           url: m.url,
           tabId,
-          type: classifyMedia(m.url, m.contentType || ""),
+          type,
+          hlsKind,
           contentType: m.contentType || "",
           size: m.size || 0,
-          filename: guessFilename(m.url, m.contentType || ""),
-          source: "dom",
+          filename: guessFilename(m.url, m.contentType || "", m.pageTitle || ""),
+          source: m.source || "dom",
           pageTitle: m.pageTitle || "",
           requestHeaders: headers,
         });
@@ -485,22 +497,31 @@ function notifyPrimary(tabId) {
 
 function pickPrimaryForTab(tabId) {
   let list = [...items.values()].filter((i) => tabId < 0 || i.tabId === tabId);
-  list = list.filter((i) => !isNoiseItem(i));
+  list = list.filter((i) => isPrimaryCandidate(i));
   if (!list.length) return null;
-  list.sort((a, b) => scoreItem(b) - scoreItem(a) || b.seenAt - a.seenAt);
+
+  // Aynı path'te birden fazla imza varsa en taze HLS master'ı öne al
+  const masters = list.filter(
+    (i) => i.type === "hls" && (i.hlsKind === "master" || /master\.(txt|m3u8)/i.test(i.url || ""))
+  );
+  if (masters.length) {
+    masters.sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0) || scoreItem(b) - scoreItem(a));
+    // En yüksek skorlu master ailesi
+    const bestMaster = masters[0];
+    const family = streamPathKey(bestMaster.url);
+    const freshSame = masters
+      .filter((m) => streamPathKey(m.url) === family)
+      .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0))[0];
+    const top = freshSame || bestMaster;
+    return { ...top, displayName: displayLabel(top) };
+  }
+
+  list.sort((a, b) => scoreItem(b) - scoreItem(a) || (b.seenAt || 0) - (a.seenAt || 0));
   const top = list[0];
   return {
     ...top,
     displayName: displayLabel(top),
   };
-}
-
-function isNoiseItem(it) {
-  const u = `${it.url || ""} ${it.filename || ""}`;
-  if (/site\.webm|\/logo|sprite|thumbnail|preview/i.test(u)) return true;
-  if (/sublist_aud|\/aud\d|\baudio\.m4a\b/i.test(u)) return true;
-  if (it.type === "segment") return true;
-  return false;
 }
 
 async function activeTabIdSafe() {
@@ -544,23 +565,23 @@ async function getItemsForTab(tabId) {
   return filtered.length ? filtered : list.slice(0, 30);
 }
 
-function scoreItem(it) {
-  let s = Number(it.size) || 0;
-  if (it.type === "hls") {
-    // master playlist'i üste al (asıl video buradan seçilir)
-    if (it.hlsKind === "master") s += 50_000_000;
-    else s += 8_000_000;
-  }
-  if (it.type === "video") s += 1_000_000;
-  if (/^video\//i.test(it.contentType || "")) s += 2_000_000;
-  if (it.source === "network") s += 500_000;
-  return s;
-}
-
 function updateBadge() {
-  const n = items.size;
-  chrome.action.setBadgeBackgroundColor({ color: "#e85d04" });
-  chrome.action.setBadgeText({ text: n > 0 ? String(Math.min(n, 99)) : "" });
+  // Rozet: aktif sekmedeki indirilebilir aday sayısı daha anlamlı
+  chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    const tabId = tab?.id;
+    let n;
+    if (tabId != null) {
+      n = [...items.values()].filter((i) => i.tabId === tabId && isPrimaryCandidate(i)).length;
+    } else {
+      n = [...items.values()].filter((i) => isPrimaryCandidate(i)).length;
+    }
+    chrome.action.setBadgeBackgroundColor({ color: "#e85d04" });
+    chrome.action.setBadgeText({ text: n > 0 ? String(Math.min(n, 99)) : "" });
+  }).catch(() => {
+    const n = [...items.values()].filter((i) => isPrimaryCandidate(i)).length;
+    chrome.action.setBadgeBackgroundColor({ color: "#e85d04" });
+    chrome.action.setBadgeText({ text: n > 0 ? String(Math.min(n, 99)) : "" });
+  });
 }
 
 async function pingDownloader() {
@@ -676,33 +697,19 @@ async function probeItem(url, headers = {}) {
 }
 
 function freshestMasterForTab(tabId, preferUrl = "") {
-  let pathKey = "";
-  try {
-    if (preferUrl) {
-      const u = new URL(preferUrl);
-      pathKey = `${u.origin}${u.pathname}`;
-    }
-  } catch {
-    /* ignore */
-  }
+  const pathKey = preferUrl ? streamPathKey(preferUrl) : "";
   const list = [...items.values()]
     .filter(
       (i) =>
         (tabId < 0 || i.tabId === tabId) &&
         i.type === "hls" &&
-        (/master\.(txt|m3u8)/i.test(i.url) || i.hlsKind === "master")
+        !isNoiseItem(i) &&
+        (i.hlsKind === "master" || /master\.(txt|m3u8)/i.test(i.url || ""))
     )
-    .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0));
+    .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0) || scoreItem(b) - scoreItem(a));
   if (!list.length) return null;
   if (pathKey) {
-    const same = list.find((i) => {
-      try {
-        const u = new URL(i.url);
-        return `${u.origin}${u.pathname}` === pathKey;
-      } catch {
-        return false;
-      }
-    });
+    const same = list.find((i) => streamPathKey(i.url) === pathKey);
     if (same) return same;
   }
   return list[0];

@@ -1,5 +1,5 @@
 import { t, syncLangFromService } from "./lib/i18n.js";
-import { formatBytes, ensureMp4Name } from "./lib/media.js";
+import { formatBytes, ensureMp4Name, isNoiseItem, isPrimaryCandidate } from "./lib/media.js";
 
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
@@ -66,12 +66,7 @@ async function load() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const res = await chrome.runtime.sendMessage({ type: "GET_ITEMS", tabId: tab?.id ?? -1 });
-  renderList((res?.items || []).filter((i) => !isNoise(i)));
-}
-
-function isNoise(it) {
-  const u = `${it.url || ""} ${it.filename || ""}`;
-  return /site\.webm|sublist_aud|\/aud\d|sprite|thumbnail/i.test(u);
+  renderList((res?.items || []).filter((i) => isPrimaryCandidate(i) && !isNoiseItem(i)));
 }
 
 async function ensureProbe(item) {

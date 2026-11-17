@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VidSniff — Video Download Manager",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "description": "EN: Catch streams & save MP4. TR: Akışı yakala, MP4 olarak kaydet.",
   "browser_specific_settings": {
     "gecko": {
