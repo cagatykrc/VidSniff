@@ -189,11 +189,19 @@ export async function downloadAndInstall(release, onProgress, onPhase) {
   await downloadFile(release.url, dest, onProgress);
   onPhase?.("install");
   onProgress?.(100);
-  // NSIS silent install — wizard açılmaz, kurulum bitince runAfterFinish uygulamayı açar
-  const child = spawn(dest, ["/S"], {
+
+  // Silent /S ile runAfterFinish çalışmaz — kurulum bitince uygulamayı yeniden aç
+  const installedExe = path.join(
+    process.env.LOCALAPPDATA || "",
+    "Programs",
+    "VidSniff",
+    "VidSniff.exe"
+  );
+  // cmd: installer bitene kadar bekle, sonra VidSniff'i başlat
+  const relaunch = `start /wait "" "${dest}" /S & if exist "${installedExe}" (start "" "${installedExe}") else (start "" "${dest}" /S)`;
+  const child = spawn("cmd.exe", ["/d", "/c", relaunch], {
     detached: true,
     stdio: "ignore",
-    shell: false,
     windowsHide: true,
   });
   child.unref();

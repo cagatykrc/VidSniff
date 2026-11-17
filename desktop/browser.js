@@ -145,7 +145,7 @@ export function showBrowser(opts) {
     syncNav(view?.webContents?.getURL?.() || "");
   });
 
-  wc.loadURL("about:blank");
+  wc.loadURL("https://www.google.com/");
   return win;
 }
 
