@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VidSniff Update</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --panel: #1a1e27;
+      --line: #2a3140;
+      --text: #eef1f6;
+      --muted: #9aa3b5;
+      --accent: #ff6b1a;
+      --font: "Segoe UI", Candara, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background:
+        radial-gradient(420px 180px at 0% 0%, #2a1a12 0%, transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font: 13px/1.4 var(--font);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .card {
+      width: 100%;
+      max-width: 380px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 18px 18px 16px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      background: url("./logo.png") center/cover no-repeat;
+      flex: 0 0 auto;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0; font-size: 15px; }
+    .sub { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #0f1218;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ff8a3d, var(--accent));
+      transition: width .2s ease;
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pct { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="row">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1 id="title">Güncelleme indiriliyor</h1>
+        <p class="sub" id="sub">VidSniff</p>
+      </div>
+    </div>
+    <div class="bar"><span id="fill"></span></div>
+    <div class="meta">
+      <span id="phase">İndiriliyor…</span>
+      <span class="pct" id="pct">0%</span>
+    </div>
+  </div>
+  <script>
+    const fill = document.getElementById("fill");
+    const pctEl = document.getElementById("pct");
+    const title = document.getElementById("title");
+    const sub = document.getElementById("sub");
+    const phase = document.getElementById("phase");
+
+    window.vidsniffUpdate?.onProgress?.((data) => {
+      const pct = Math.max(0, Math.min(100, Number(data?.pct) || 0));
+      fill.style.width = pct + "%";
+      pctEl.textContent = pct + "%";
+      if (data?.title) title.textContent = data.title;
+      if (data?.sub) sub.textContent = data.sub;
+      if (data?.phase) phase.textContent = data.phase;
+    });
+  </script>
+</body>
+</html>

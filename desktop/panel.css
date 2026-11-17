@@ -32,15 +32,8 @@ body {
 .brand { display: flex; gap: 10px; align-items: center; }
 .logo {
   width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(145deg, #ff8a3d, #e85d04 55%, #9a3412);
-  position: relative;
-}
-.logo::after {
-  content: "";
-  position: absolute;
-  inset: 10px 11px 10px 13px;
-  background: #fff;
-  clip-path: polygon(0 0, 0 100%, 100% 50%);
+  background: url("./logo.png") center/cover no-repeat;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 h1 { margin: 0; font-size: 16px; }
 .sub { margin: 2px 0 0; color: var(--muted); font-size: 11px; }

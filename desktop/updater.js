@@ -169,11 +169,12 @@ export async function checkLatestRelease(currentVersion) {
 }
 
 /**
- * Download setup and launch installer, then quit.
- * @param {{ url: string, name: string }} release
+ * Download setup and launch silent NSIS installer (/S), then quit.
+ * @param {{ url: string, name: string, version?: string }} release
  * @param {(pct: number) => void} [onProgress]
+ * @param {(phase: 'download'|'install') => void} [onPhase]
  */
-export async function downloadAndInstall(release, onProgress) {
+export async function downloadAndInstall(release, onProgress, onPhase) {
   const electronApp = getApp();
   const tmpRoot = electronApp?.getPath?.("temp") || process.env.TEMP || process.cwd();
   const dir = path.join(tmpRoot, "VidSniff-updates");
@@ -184,11 +185,16 @@ export async function downloadAndInstall(release, onProgress) {
   } catch {
     /* ignore */
   }
+  onPhase?.("download");
   await downloadFile(release.url, dest, onProgress);
-  const child = spawn(dest, [], {
+  onPhase?.("install");
+  onProgress?.(100);
+  // NSIS silent install — wizard açılmaz, kurulum bitince runAfterFinish uygulamayı açar
+  const child = spawn(dest, ["/S"], {
     detached: true,
     stdio: "ignore",
     shell: false,
+    windowsHide: true,
   });
   child.unref();
   return dest;

@@ -84,6 +84,11 @@ export function getJobs() {
   return [...jobs.values()].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
 }
 
+export function clearJobs() {
+  jobs.clear();
+  return { ok: true, cleared: true };
+}
+
 export function getDownloadDir() {
   return DOWNLOAD_DIR;
 }
@@ -157,6 +162,11 @@ export async function startDownloader({ port = PORT, downloadDir, prefs, prefsPa
 
       if (req.method === "GET" && url.pathname === "/jobs") {
         return json(res, 200, { jobs: getJobs() });
+      }
+
+      if (req.method === "POST" && url.pathname === "/jobs/clear") {
+        clearJobs();
+        return json(res, 200, { ok: true });
       }
 
       if (req.method === "GET" && url.pathname.startsWith("/jobs/")) {

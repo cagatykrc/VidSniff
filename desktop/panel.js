@@ -13,6 +13,14 @@ document.getElementById("openSetup")?.addEventListener("click", () => {
 document.getElementById("openSettings")?.addEventListener("click", () => {
   window.vidsniff?.openSettings?.();
 });
+document.getElementById("clearList")?.addEventListener("click", async () => {
+  try {
+    await fetch(`${API}/jobs/clear`, { method: "POST" });
+  } catch {
+    await window.vidsniff?.clearJobs?.();
+  }
+  await load();
+});
 
 function applyStatic() {
   document.querySelectorAll("[data-i18n]").forEach((el) => {

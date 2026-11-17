@@ -140,6 +140,14 @@ export function mediaKey(url) {
   try {
     const u = new URL(url);
     u.hash = "";
+    // CDN imzalı HLS: ?s= döner — aynı path tek kayıtta güncellensin (eski 404 olmasın)
+    if (
+      /\/hls\//i.test(u.pathname) ||
+      /master\.(txt|m3u8)$/i.test(u.pathname) ||
+      /cdnimages|cdnstatic|playmix/i.test(u.hostname)
+    ) {
+      u.search = "";
+    }
     return u.toString();
   } catch {
     return url;

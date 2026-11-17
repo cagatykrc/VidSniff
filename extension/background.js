@@ -675,16 +675,63 @@ async function probeItem(url, headers = {}) {
   }
 }
 
+function freshestMasterForTab(tabId, preferUrl = "") {
+  let pathKey = "";
+  try {
+    if (preferUrl) {
+      const u = new URL(preferUrl);
+      pathKey = `${u.origin}${u.pathname}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  const list = [...items.values()]
+    .filter(
+      (i) =>
+        (tabId < 0 || i.tabId === tabId) &&
+        i.type === "hls" &&
+        (/master\.(txt|m3u8)/i.test(i.url) || i.hlsKind === "master")
+    )
+    .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0));
+  if (!list.length) return null;
+  if (pathKey) {
+    const same = list.find((i) => {
+      try {
+        const u = new URL(i.url);
+        return `${u.origin}${u.pathname}` === pathKey;
+      } catch {
+        return false;
+      }
+    });
+    if (same) return same;
+  }
+  return list[0];
+}
+
 async function downloadItem(item, mode, quality = "auto") {
   if (!item?.url) return { ok: false, error: "URL yok" };
 
   // İsim .mp4 olsa bile /hls/ yolu → HLS olarak indir
   const forcedType = classifyMedia(item.url, item.contentType || "");
-  const effective = { ...item, type: forcedType || item.type };
+  let effective = { ...item, type: forcedType || item.type };
 
   if (forcedType === "hls" && item.type !== "hls") {
     // listede yanlış "video" kalan eski kayıtları düzelt
     effective.hlsKind = detectHlsKind(item.url, item.size || 0);
+  }
+
+  // En taze master'ı kullan (imzalı CDN URL'leri çabuk ölür)
+  if (effective.type === "hls" || /\/hls\//i.test(effective.url)) {
+    const fresh = freshestMasterForTab(effective.tabId, effective.url);
+    if (fresh?.url) {
+      effective = {
+        ...effective,
+        ...fresh,
+        type: "hls",
+        displayName: effective.displayName || fresh.displayName,
+        filename: effective.filename || fresh.filename,
+      };
+    }
   }
 
   const headers = await buildDownloadHeaders(effective);
@@ -699,12 +746,7 @@ async function downloadItem(item, mode, quality = "auto") {
     }
     // DOM'daki sahte .mp4 çoğu zaman playlist değil — master.txt tercih et
     if (/\/hls\//i.test(effective.url) && /\.mp4(?:$|\?|#)/i.test(effective.url) && !/\.m3u8|master\.txt/i.test(effective.url)) {
-      const master = [...items.values()].find(
-        (i) =>
-          i.tabId === effective.tabId &&
-          i.type === "hls" &&
-          (/master\.(txt|m3u8)/i.test(i.url) || i.hlsKind === "master")
-      );
+      const master = freshestMasterForTab(effective.tabId, effective.url);
       if (master) {
         const masterHeaders = await buildDownloadHeaders(master);
         const result = await companionDownload(master, masterHeaders, quality);
@@ -718,6 +760,25 @@ async function downloadItem(item, mode, quality = "auto") {
       // master yoksa URL'yi HLS gibi dene (bazen media playlist)
       effective.type = "hls";
     }
+
+    // İndirmeden önce probe: 404 ise taze master dene / net hata ver
+    const probe = await probeItem(effective.url, headers);
+    if (!probe.ok) {
+      const fresh = freshestMasterForTab(effective.tabId, effective.url);
+      if (fresh && fresh.url !== effective.url) {
+        const h2 = await buildDownloadHeaders(fresh);
+        const probe2 = await probeItem(fresh.url, h2);
+        if (probe2.ok) {
+          return companionDownload(fresh, h2, quality);
+        }
+      }
+      return {
+        ok: false,
+        error:
+          "CDN linki geçersiz (404/403). Sayfada videoyu yeniden oynatıp hemen İndir’e bas.",
+      };
+    }
+
     return companionDownload(effective, headers, quality);
   }
 

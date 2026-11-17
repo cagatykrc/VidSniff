@@ -18,6 +18,7 @@ import {
   stopDownloader,
   getDownloadDir,
   getJobs,
+  clearJobs,
   setPrefs,
   setDownloadDir,
 } from "../downloader/server.js";
@@ -38,6 +39,7 @@ let tray = null;
 let panel = null;
 let setupWin = null;
 let settingsWin = null;
+let updateWin = null;
 let quitting = false;
 let extPaths = { chromeExt: "", firefoxExt: "" };
 /** @type {{ lang: string, downloadDir?: string, quality?: string }} */
@@ -99,6 +101,8 @@ async function ensureStableExtensions() {
     "icons/icon32.png",
     "icons/icon48.png",
     "icons/icon128.png",
+    "icons/icon256.png",
+    "icons/logo.png",
   ];
 
   for (const v of variants) {
@@ -155,6 +159,7 @@ async function main() {
   tray.on("double-click", () => showPanel());
 
   ipcMain.handle("jobs:list", () => getJobs());
+  ipcMain.handle("jobs:clear", () => clearJobs());
   ipcMain.handle("downloads:open", () => shell.openPath(getDownloadDir()));
   ipcMain.handle("shell:show", (_e, filePath) => {
     if (filePath) shell.showItemInFolder(filePath);
@@ -318,15 +323,37 @@ async function runUpdateCheck({ silent = false, manual = false } = {}) {
       return { ok: true, skipped: true, version: release.version };
     }
 
-    const progress = { pct: 0 };
-    // Basit ilerleme: her %10’da bir log; dialog donmasın diye ayrı await
-    await downloadAndInstall(release, (pct) => {
-      progress.pct = pct;
-      if (pct % 20 === 0) {
-        console.log(`[update] ${pct}%`);
-      }
+    showUpdateProgress({
+      title: t(L, "updateDownloadingTitle"),
+      sub: `VidSniff ${release.version}`,
+      phase: t(L, "updatePhaseDownload"),
+      pct: 0,
     });
 
+    await downloadAndInstall(
+      release,
+      (pct) => {
+        showUpdateProgress({
+          title: t(L, "updateDownloadingTitle"),
+          sub: `VidSniff ${release.version}`,
+          phase: t(L, "updatePhaseDownload"),
+          pct,
+        });
+      },
+      (phase) => {
+        if (phase === "install") {
+          showUpdateProgress({
+            title: t(L, "updateInstallingTitle"),
+            sub: `VidSniff ${release.version}`,
+            phase: t(L, "updatePhaseInstall"),
+            pct: 100,
+          });
+        }
+      }
+    );
+
+    // Sessiz kurulum bitsin diye kısa bekle, sonra çık
+    await new Promise((r) => setTimeout(r, 1200));
     quitting = true;
     try {
       await stopDownloader();
@@ -337,6 +364,47 @@ async function runUpdateCheck({ silent = false, manual = false } = {}) {
     return { ok: true, installing: true, version: release.version };
   } finally {
     updateBusy = false;
+  }
+}
+
+function showUpdateProgress(data) {
+  if (!updateWin || updateWin.isDestroyed()) {
+    updateWin = new BrowserWindow({
+      width: 420,
+      height: 168,
+      resizable: false,
+      maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      show: false,
+      frame: false,
+      alwaysOnTop: true,
+      autoHideMenuBar: true,
+      backgroundColor: "#12141a",
+      icon: ICON,
+      webPreferences: {
+        preload: path.join(__dirname, "preload-update.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    updateWin.loadFile(path.join(__dirname, "update.html"));
+    updateWin.once("ready-to-show", () => {
+      if (!updateWin.isDestroyed()) updateWin.show();
+    });
+    updateWin.on("closed", () => {
+      updateWin = null;
+    });
+  }
+  const send = () => {
+    if (updateWin && !updateWin.isDestroyed()) {
+      updateWin.webContents.send("update:progress", data);
+    }
+  };
+  if (updateWin.webContents.isLoading()) {
+    updateWin.webContents.once("did-finish-load", send);
+  } else {
+    send();
   }
 }
 

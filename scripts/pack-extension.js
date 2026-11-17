@@ -23,6 +23,8 @@ const SHARED = [
   "icons/icon32.png",
   "icons/icon48.png",
   "icons/icon128.png",
+  "icons/icon256.png",
+  "icons/logo.png",
 ];
 
 async function buildVariant(name, manifestFile) {

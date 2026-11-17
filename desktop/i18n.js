@@ -20,6 +20,7 @@ export const STRINGS = {
     panelEmpty: "No downloads yet.<br/>Download a video from the extension.",
     panelShow: "Show",
     panelFile: "file",
+    panelClear: "Clear list",
 
     setupTitle: "Extension setup assistant",
     setupLead: "VidSniff is running. Add the browser extension once.",
@@ -63,17 +64,20 @@ export const STRINGS = {
     settingsExtBtn: "Extension setup assistant",
     settingsUpdates: "Updates",
     settingsUpdatesHint:
-      "On every launch VidSniff checks GitHub Releases for a newer Setup.",
+      "On launch VidSniff checks GitHub Releases and can install silently in the background.",
     settingsCheckUpdate: "Check for updates",
     settingsClose: "Close",
 
     updateAvailableTitle: "Update available",
     updateAvailableBody:
-      "VidSniff {latest} is available (you have {current}).\n\nDownload and install now?",
+      "VidSniff {latest} is available (you have {current}).\n\nDownload and install silently now? (no setup wizard)",
     updateNoneTitle: "Up to date",
     updateNoneBody: "You already have the latest version ({current}).",
     updateDownloadingTitle: "Downloading update",
     updateDownloadingBody: "Downloading VidSniff {latest}… {pct}%",
+    updateInstallingTitle: "Installing update",
+    updatePhaseDownload: "Downloading…",
+    updatePhaseInstall: "Installing silently…",
     updateErrorTitle: "Update failed",
     updateErrorBody: "Could not update: {error}",
     updateNoAsset:
@@ -103,6 +107,7 @@ export const STRINGS = {
     panelEmpty: "Henüz indirme yok.<br/>Eklentiden video indir.",
     panelShow: "Göster",
     panelFile: "dosya",
+    panelClear: "Listeyi temizle",
 
     setupTitle: "Eklenti kurulum asistanı",
     setupLead: "VidSniff servisi çalışıyor. Tarayıcıya eklentiyi bir kez eklemen yeterli.",
@@ -148,17 +153,20 @@ export const STRINGS = {
     settingsExtBtn: "Eklenti kurulum asistanı",
     settingsUpdates: "Güncellemeler",
     settingsUpdatesHint:
-      "Her açılışta VidSniff, GitHub Releases’ta daha yeni Setup var mı diye bakar.",
+      "Her açılışta GitHub Releases kontrol edilir; onaylarsan sessizce arka planda kurulur.",
     settingsCheckUpdate: "Güncellemeleri kontrol et",
     settingsClose: "Kapat",
 
     updateAvailableTitle: "Güncelleme var",
     updateAvailableBody:
-      "VidSniff {latest} çıktı (şu an {current}).\n\nŞimdi indirip kurulsun mu?",
+      "VidSniff {latest} çıktı (şu an {current}).\n\nŞimdi sessizce indirip kurulsun mu? (Setup sihirbazı açılmaz)",
     updateNoneTitle: "Güncelsiniz",
     updateNoneBody: "En son sürüm zaten yüklü ({current}).",
     updateDownloadingTitle: "Güncelleme indiriliyor",
     updateDownloadingBody: "VidSniff {latest} indiriliyor… %{pct}",
+    updateInstallingTitle: "Güncelleme kuruluyor",
+    updatePhaseDownload: "İndiriliyor…",
+    updatePhaseInstall: "Sessiz kurulum…",
     updateErrorTitle: "Güncelleme başarısız",
     updateErrorBody: "Güncellenemedi: {error}",
     updateNoAsset:

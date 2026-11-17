@@ -592,8 +592,14 @@ function fetchBuffer(url, headers) {
   return new Promise((resolve, reject) => {
     get(url, headers, (res) => {
       if (res.statusCode >= 400) {
-        const err = new Error(`HTTP ${res.statusCode} → ${url.slice(0, 120)}`);
-        err.statusCode = res.statusCode;
+        const code = res.statusCode;
+        const short = String(url || "").slice(0, 100);
+        const hint =
+          code === 404 || code === 403
+            ? " — CDN linki ölmüş olabilir. Sayfada videoyu yeniden oynatıp hemen İndir'e bas."
+            : "";
+        const err = new Error(`HTTP ${code} → ${short}${hint}`);
+        err.statusCode = code;
         reject(err);
         res.resume();
         return;

@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("vidsniff", {
   listJobs: () => ipcRenderer.invoke("jobs:list"),
+  clearJobs: () => ipcRenderer.invoke("jobs:clear"),
   openDownloads: () => ipcRenderer.invoke("downloads:open"),
   showInFolder: (filePath) => ipcRenderer.invoke("shell:show", filePath),
   openSetup: () => ipcRenderer.invoke("ui:openSetup"),

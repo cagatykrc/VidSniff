@@ -1,78 +1,48 @@
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
-const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "extension", "icons");
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const dir = path.join(root, "extension", "icons");
+const source = path.join(dir, "icon-source.png");
 fs.mkdirSync(dir, { recursive: true });
 
-function crc32(buf) {
-  let c = ~0;
-  for (let i = 0; i < buf.length; i += 1) {
-    c ^= buf[i];
-    for (let k = 0; k < 8; k += 1) c = c & 1 ? (0xedb88320 ^ (c >>> 1)) : c >>> 1;
-  }
-  return ~c >>> 0;
+if (!fs.existsSync(source)) {
+  console.error("Missing extension/icons/icon-source.png");
+  process.exit(1);
 }
 
-function chunk(type, data) {
-  const typeBuf = Buffer.from(type);
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])));
-  return Buffer.concat([len, typeBuf, data, crc]);
+fs.copyFileSync(source, path.join(dir, "logo.png"));
+fs.copyFileSync(source, path.join(root, "desktop", "logo.png"));
+
+const sizes = [16, 32, 48, 128, 256, 512];
+const ps = `
+Add-Type -AssemblyName System.Drawing
+$src = ${JSON.stringify(source)}
+$dir = ${JSON.stringify(dir)}
+foreach ($s in @(${sizes.join(",")})) {
+  $img = [System.Drawing.Image]::FromFile($src)
+  $bmp = New-Object System.Drawing.Bitmap $s, $s
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+  $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  $g.Clear([System.Drawing.Color]::Transparent)
+  $g.DrawImage($img, 0, 0, $s, $s)
+  $out = Join-Path $dir ("icon{0}.png" -f $s)
+  $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+  $g.Dispose(); $bmp.Dispose(); $img.Dispose()
 }
+`;
 
-function png(size) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8;
-  ihdr[9] = 2; // RGB
-  ihdr[10] = 0;
-  ihdr[11] = 0;
-  ihdr[12] = 0;
-
-  const rows = [];
-  for (let y = 0; y < size; y += 1) {
-    const row = Buffer.alloc(1 + size * 3);
-    for (let x = 0; x < size; x += 1) {
-      const nx = (x + 0.5) / size;
-      const ny = (y + 0.5) / size;
-      // yuvarlak turuncu arka plan
-      const cx = nx - 0.5;
-      const cy = ny - 0.5;
-      const inCircle = cx * cx + cy * cy <= 0.48 * 0.48;
-      let r = 18, g = 20, b = 26;
-      if (inCircle) {
-        r = 232; g = 93; b = 4;
-        // play üçgeni
-        const px = (nx - 0.38) / 0.42;
-        const py = (ny - 0.28) / 0.44;
-        if (px >= 0 && px <= 1 && py >= 0 && py <= 1) {
-          const upper = py >= px * 0.5;
-          const lower = py <= 1 - px * 0.5;
-          if (upper && lower) {
-            r = 255; g = 255; b = 255;
-          }
-        }
-      }
-      const i = 1 + x * 3;
-      row[i] = r;
-      row[i + 1] = g;
-      row[i + 2] = b;
-    }
-    rows.push(row);
-  }
-
-  const raw = Buffer.concat(rows);
-  const compressed = zlib.deflateSync(raw);
-  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", compressed), chunk("IEND", Buffer.alloc(0))]);
+const r = spawnSync(
+  "powershell.exe",
+  ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+  { encoding: "utf8" }
+);
+if (r.status !== 0) {
+  console.error(r.stderr || r.stdout || "icon resize failed");
+  process.exit(1);
 }
-
-for (const s of [16, 32, 48, 128, 256, 512]) {
-  fs.writeFileSync(path.join(dir, `icon${s}.png`), png(s));
-}
-console.log("icons ready → extension/icons");
+console.log("icons ready → extension/icons (+ desktop/logo.png)");
