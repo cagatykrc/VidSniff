@@ -20,10 +20,20 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PARTITION = "persist:vidsniff-browser";
-const TOOLBAR_H = 118;
+const CHROME_H = 56;
+const DOCK_H = 128;
 const DOWNLOADER = "http://127.0.0.1:17890";
 const CHROME_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const STEALTH_JS = `(() => {
+  try {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = window.chrome || { runtime: {}, app: { isInstalled: false } };
+    Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+  } catch (_) {}
+})();`;
 
 /** @type {BrowserWindow | null} */
 let win = null;
@@ -39,7 +49,14 @@ let sniffAttached = false;
 let ipcReady = false;
 
 /**
- * @param {{ icon: string, getStrings: () => Record<string,string>, getLang: () => string }} opts
+ * @param {{
+ *   icon: string,
+ *   getStrings: () => Record<string,string>,
+ *   getLang: () => string,
+ *   openSettings?: () => void,
+ *   openFolder?: () => void,
+ *   showInFolder?: (p: string) => void,
+ * }} opts
  */
 export function showBrowser(opts) {
   if (win && !win.isDestroyed()) {
@@ -75,7 +92,8 @@ export function showBrowser(opts) {
       session: session.fromPartition(PARTITION),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
+      preload: path.join(__dirname, "preload-stealth.cjs"),
     },
   });
   win.setBrowserView(view);
@@ -93,7 +111,14 @@ export function showBrowser(opts) {
     if (/^https?:/i.test(url)) wc.loadURL(url);
     return { action: "deny" };
   });
-  wc.on("did-navigate", (_e, url) => syncNav(url));
+  const injectStealth = () => {
+    wc.executeJavaScript(STEALTH_JS, true).catch(() => {});
+  };
+  wc.on("dom-ready", injectStealth);
+  wc.on("did-navigate", (_e, url) => {
+    injectStealth();
+    syncNav(url);
+  });
   wc.on("did-navigate-in-page", (_e, url) => syncNav(url));
   wc.on("page-title-updated", (_e, title) => {
     if (win && !win.isDestroyed()) win.setTitle(`${title} — VidSniff`);
@@ -119,7 +144,6 @@ export function showBrowser(opts) {
     syncNav(view?.webContents?.getURL?.() || "");
   });
 
-  // Boş başlangıç sayfası
   wc.loadURL("about:blank");
   return win;
 }
@@ -135,13 +159,15 @@ export function pushBrowserI18n(strings, lang) {
 function layoutView() {
   if (!win || win.isDestroyed() || !view) return;
   const [w, h] = win.getContentSize();
+  const top = CHROME_H;
+  const bottom = DOCK_H;
   view.setBounds({
     x: 0,
-    y: TOOLBAR_H,
+    y: top,
     width: w,
-    height: Math.max(0, h - TOOLBAR_H),
+    height: Math.max(0, h - top - bottom),
   });
-  view.setAutoResize({ width: true, height: true });
+  view.setAutoResize({ width: true, height: false });
 }
 
 function sendToolbar(payload) {
@@ -432,6 +458,19 @@ function ensureIpc(opts) {
   ipcMain.handle("browser:clearCaptures", () => {
     items.clear();
     pushPrimary();
+    return true;
+  });
+
+  ipcMain.handle("browser:openFolder", () => {
+    opts.openFolder?.();
+    return true;
+  });
+  ipcMain.handle("browser:openSettings", () => {
+    opts.openSettings?.();
+    return true;
+  });
+  ipcMain.handle("browser:showInFolder", (_e, filePath) => {
+    if (filePath) opts.showInFolder?.(filePath);
     return true;
   });
 }

@@ -9,30 +9,37 @@
 <body>
   <div class="chrome">
     <div class="nav">
+      <div class="logo" aria-hidden="true"></div>
       <button type="button" id="back" class="icon" title="Back" disabled>←</button>
       <button type="button" id="forward" class="icon" title="Forward" disabled>→</button>
       <button type="button" id="reload" class="icon" title="Reload">↻</button>
       <form id="urlForm" class="url-wrap">
-        <input id="url" type="text" spellcheck="false" autocomplete="off"
-          placeholder="https://…" />
-        <button type="submit" id="go" class="go">Go</button>
+        <input id="url" type="text" spellcheck="false" autocomplete="off" placeholder="https://…" />
       </form>
+      <select id="quality" hidden></select>
+      <button type="button" id="download" class="primary" disabled>MP4</button>
+      <button type="button" id="openFolder" class="ghost" title="Folder">📁</button>
+      <button type="button" id="openSettings" class="ghost" title="Settings">⚙</button>
     </div>
-    <div class="capture">
-      <div class="cap-left">
-        <div class="logo" aria-hidden="true"></div>
-        <div class="cap-text">
-          <div id="capTitle" class="cap-title">—</div>
-          <div id="capMeta" class="cap-meta">Play a video on the page to capture it</div>
-        </div>
-      </div>
-      <div class="cap-actions">
-        <select id="quality" hidden></select>
-        <button type="button" id="download" class="primary" disabled>Download MP4</button>
-      </div>
+    <div class="cap-line">
+      <span id="capTitle" class="cap-title">—</span>
+      <span id="capMeta" class="cap-meta"></span>
+      <span id="status" class="status" hidden></span>
     </div>
-    <div id="status" class="status" hidden></div>
   </div>
+
+  <div class="jobs-dock">
+    <div class="jobs-head">
+      <span data-i18n="browserJobs">Downloads</span>
+      <div class="jobs-actions">
+        <button type="button" id="clearList" class="ghost mini" data-i18n="panelClear">Clear</button>
+      </div>
+    </div>
+    <div id="list" class="jobs-list">
+      <div class="empty" id="jobsEmpty">—</div>
+    </div>
+  </div>
+
   <script src="browser-ui.js"></script>
 </body>
 </html>

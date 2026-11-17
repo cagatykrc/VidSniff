@@ -240,19 +240,47 @@ async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress) 
     await writeBuf(await fetchBufferRetry(initSegment.url, headers));
   }
 
-  for (let i = 0; i < segments.length; i += 1) {
-    const seg = segments[i];
-    let buf = await fetchBufferRetry(seg.url, headers);
-    if (seg.key?.method === "AES-128") {
-      const keyBuf = await getKey(seg.key.uri, headers, keyCache);
-      const iv = seg.key.iv || sequenceIv(seg.seq);
-      buf = decryptAes128(buf, keyBuf, iv);
-    }
-    await writeBuf(buf);
-    onProgress?.(Math.round(((i + 1) / segments.length) * 100));
-    // CDN rate-limit / ECONNRESET azaltmak için kısa nefes
-    if (i > 0 && i % 20 === 0) await sleep(150);
+  // Paralel segment indirme + sırayla yaz (bellekte tüm filmi tutma)
+  const CONCURRENCY = Math.min(8, Math.max(3, segments.length));
+  const ready = new Map();
+  let nextWrite = 0;
+  let completed = 0;
+  let cursor = 0;
+  let writeChain = Promise.resolve();
+
+  function flushWrites() {
+    writeChain = writeChain.then(async () => {
+      while (ready.has(nextWrite)) {
+        const buf = ready.get(nextWrite);
+        ready.delete(nextWrite);
+        await writeBuf(buf);
+        nextWrite += 1;
+      }
+    });
+    return writeChain;
   }
+
+  async function worker() {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= segments.length) return;
+      const seg = segments[i];
+      let buf = await fetchBufferRetry(seg.url, headers);
+      if (seg.key?.method === "AES-128") {
+        const keyBuf = await getKey(seg.key.uri, headers, keyCache);
+        const iv = seg.key.iv || sequenceIv(seg.seq);
+        buf = decryptAes128(buf, keyBuf, iv);
+      }
+      ready.set(i, buf);
+      completed += 1;
+      onProgress?.(Math.round((completed / segments.length) * 100));
+      await flushWrites();
+    }
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  await flushWrites();
 
   await new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve())));
   await fsp.rename(tmp, outFile).catch(async () => {
@@ -613,11 +641,12 @@ function fetchBuffer(url, headers) {
 }
 
 const insecureAgent = new https.Agent({
-  keepAlive: false,
-  maxSockets: 4,
+  keepAlive: true,
+  maxSockets: 16,
+  maxFreeSockets: 8,
   rejectUnauthorized: true,
 });
-const httpAgent = new http.Agent({ keepAlive: false, maxSockets: 4 });
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 16, maxFreeSockets: 8 });
 
 function get(url, headers, onRes, onErr, redirectLeft = 8) {
   try {

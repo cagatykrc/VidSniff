@@ -301,7 +301,7 @@ async function runJob(job, headers) {
       });
       job.path = finalPath;
     } else {
-      await downloadFile(job.url, job.path, { headers, onProgress, connections: 4 });
+      await downloadFile(job.url, job.path, { headers, onProgress, connections: 6 });
     }
 
     job.status = "done";

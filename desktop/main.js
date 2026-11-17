@@ -158,7 +158,8 @@ async function main() {
   const image = nativeImage.createFromPath(ICON);
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
   rebuildTrayMenu();
-  tray.on("double-click", () => showPanel());
+  tray.on("double-click", () => openBrowser());
+  tray.on("click", () => openBrowser());
 
   ipcMain.handle("jobs:list", () => getJobs());
   ipcMain.handle("jobs:clear", () => clearJobs());
@@ -244,13 +245,11 @@ async function main() {
     return runUpdateCheck({ silent: !!opts.silent, manual: true });
   });
 
+  // Tek pencere: gömülü tarayıcı (+ alt indirme listesi)
+  openBrowser();
   const flag = path.join(DATA_DIR, "setup-done");
   if (!fs.existsSync(flag)) {
-    openBrowser();
-    showPanel();
     await fsp.writeFile(flag, new Date().toISOString(), "utf8");
-  } else {
-    showPanel();
   }
 
   refreshTrayTitle();
@@ -459,9 +458,8 @@ function rebuildTrayMenu() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: t(L, "trayBrowser"), click: () => openBrowser() },
-      { label: t(L, "trayPanel"), click: () => showPanel() },
-      { label: t(L, "traySetup"), click: () => showSetup() },
       { label: t(L, "traySettings"), click: () => showSettings() },
+      { label: t(L, "traySetup"), click: () => showSetup() },
       {
         label: t(L, "trayDownloads"),
         click: () => shell.openPath(getDownloadDir()),
@@ -494,6 +492,11 @@ function openBrowser() {
     icon: ICON,
     getLang: () => prefs.lang,
     getStrings: () => STRINGS[prefs.lang] || STRINGS.en,
+    openSettings: () => showSettings(),
+    openFolder: () => shell.openPath(getDownloadDir()),
+    showInFolder: (filePath) => {
+      if (filePath) shell.showItemInFolder(filePath);
+    },
   });
 }
 
@@ -508,34 +511,8 @@ function refreshTrayTitle() {
 }
 
 function showPanel() {
-  if (panel && !panel.isDestroyed()) {
-    panel.show();
-    panel.focus();
-    return;
-  }
-  panel = new BrowserWindow({
-    width: 460,
-    height: 560,
-    minWidth: 380,
-    minHeight: 420,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: "#12141a",
-    icon: ICON,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  panel.loadFile(path.join(__dirname, "panel.html"));
-  panel.once("ready-to-show", () => panel.show());
-  panel.on("close", (e) => {
-    if (!quitting) {
-      e.preventDefault();
-      panel.hide();
-    }
-  });
+  // Eski ayrı panel kalktı — her şey gömülü tarayıcı penceresinde
+  openBrowser();
 }
 
 function showSetup() {
@@ -586,14 +563,14 @@ function showSettings() {
   settingsWin.once("ready-to-show", () => settingsWin.show());
 }
 
+// Bot / automation algılamasını azalt
+app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    openBrowser();
-    showPanel();
-  });
+  app.on("second-instance", () => openBrowser());
   app.whenReady().then(main).catch(async (e) => {
     console.error(e);
     try {

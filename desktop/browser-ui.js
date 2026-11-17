@@ -7,6 +7,7 @@ let primary = null;
 let qualities = [];
 let probeUrl = "";
 let loading = false;
+const API = "http://127.0.0.1:17890";
 
 const urlInput = document.getElementById("url");
 const backBtn = document.getElementById("back");
@@ -17,6 +18,7 @@ const qualityEl = document.getElementById("quality");
 const capTitle = document.getElementById("capTitle");
 const capMeta = document.getElementById("capMeta");
 const statusEl = document.getElementById("status");
+const listEl = document.getElementById("list");
 
 function t(key, fallback = "") {
   return S[key] || fallback || key;
@@ -24,11 +26,20 @@ function t(key, fallback = "") {
 
 function applyI18n() {
   urlInput.placeholder = t("browserUrlPlaceholder", "https://…");
-  document.getElementById("go").textContent = t("browserGo", "Go");
-  dlBtn.textContent = t("browserDownload", "Download MP4");
+  dlBtn.textContent = t("browserDownloadShort", "MP4");
+  const clearBtn = document.getElementById("clearList");
+  if (clearBtn) clearBtn.textContent = t("panelClear", "Clear");
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (key && S[key]) el.textContent = S[key];
+  });
   if (!primary) {
     capTitle.textContent = t("browserNoCapture", "—");
-    capMeta.textContent = t("browserPlayHint", "Play a video on the page to capture it");
+    capMeta.textContent = t("browserPlayHintShort", "Play a video to capture");
+  }
+  const empty = document.getElementById("jobsEmpty");
+  if (empty && !listEl.querySelector(".job")) {
+    empty.textContent = t("panelEmptyShort", "No downloads yet");
   }
 }
 
@@ -43,11 +54,16 @@ reloadBtn.addEventListener("click", () => {
   if (loading) api.stop();
   else api.reload();
 });
-
 dlBtn.addEventListener("click", () => startDownload());
-
-qualityEl.addEventListener("change", () => {
-  /* selection used on download */
+document.getElementById("openFolder")?.addEventListener("click", () => api.openFolder?.());
+document.getElementById("openSettings")?.addEventListener("click", () => api.openSettings?.());
+document.getElementById("clearList")?.addEventListener("click", async () => {
+  try {
+    await fetch(`${API}/jobs/clear`, { method: "POST" });
+  } catch {
+    /* ignore */
+  }
+  await loadJobs();
 });
 
 function setStatus(text, cls = "") {
@@ -65,7 +81,7 @@ function renderPrimary(item) {
   primary = item;
   if (!item) {
     capTitle.textContent = t("browserNoCapture", "—");
-    capMeta.textContent = t("browserPlayHint", "Play a video on the page to capture it");
+    capMeta.textContent = t("browserPlayHintShort", "Play a video to capture");
     dlBtn.disabled = true;
     qualityEl.hidden = true;
     qualities = [];
@@ -76,7 +92,7 @@ function renderPrimary(item) {
   const kind =
     item.type === "hls"
       ? item.hlsKind === "master"
-        ? "HLS · master"
+        ? "HLS"
         : "HLS"
       : item.type || "video";
   capMeta.textContent = kind;
@@ -99,7 +115,7 @@ async function ensureProbe(item) {
     return;
   }
   qualityEl.hidden = false;
-  qualityEl.innerHTML = `<option value="auto">${t("browserProbing", "Probing…")}</option>`;
+  qualityEl.innerHTML = `<option value="auto">${t("browserProbing", "…")}</option>`;
   const probe = await api.probe({ url: item.url });
   if (!probe?.ok || !probe.qualities?.length) {
     qualities = [{ id: "auto", label: t("browserQualityAuto", "Auto"), estimatedBytes: 0 }];
@@ -122,11 +138,11 @@ async function ensureProbe(item) {
 
 async function startDownload() {
   if (!primary?.url) {
-    setStatus(t("browserPlayFirst", "Play the video first"), "err");
+    setStatus(t("browserPlayFirst", "Play first"), "err");
     return;
   }
   dlBtn.disabled = true;
-  setStatus(t("browserStarting", "Starting…"), "run");
+  setStatus(t("browserStarting", "…"), "run");
   const qid = qualityEl.value || "auto";
   const q = qualities.find((x) => x.id === qid);
   try {
@@ -140,6 +156,7 @@ async function startDownload() {
       return;
     }
     setStatus(t("browserDownloading", "Downloading…"), "run");
+    await loadJobs();
     if (result.jobId) watchJob(result.jobId);
     else setStatus(t("browserStarted", "Started"), "ok");
   } catch (e) {
@@ -150,10 +167,11 @@ async function startDownload() {
 }
 
 async function watchJob(jobId) {
-  for (let i = 0; i < 240; i += 1) {
-    await new Promise((r) => setTimeout(r, 1000));
+  for (let i = 0; i < 600; i += 1) {
+    await new Promise((r) => setTimeout(r, 800));
     const job = await api.job(jobId);
     if (!job) continue;
+    await loadJobs();
     if (job.status === "running") {
       setStatus(`${t("browserDownloading", "Downloading…")} ${Math.round(job.progress || 0)}%`, "run");
     } else if (job.status === "done") {
@@ -166,6 +184,10 @@ async function watchJob(jobId) {
   }
 }
 
+function basename(p) {
+  return String(p || "").split(/[/\\]/).pop() || "file";
+}
+
 function esc(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -174,6 +196,44 @@ function esc(s) {
 }
 function escAttr(s) {
   return esc(s).replaceAll('"', "&quot;");
+}
+
+async function loadJobs() {
+  let jobs = [];
+  try {
+    const res = await fetch(`${API}/jobs`);
+    const data = await res.json();
+    jobs = data.jobs || [];
+  } catch {
+    jobs = [];
+  }
+  if (!jobs.length) {
+    listEl.innerHTML = `<div class="empty" id="jobsEmpty">${t("panelEmptyShort", "No downloads yet")}</div>`;
+    return;
+  }
+  listEl.innerHTML = "";
+  for (const job of jobs.slice(0, 12)) {
+    const el = document.createElement("article");
+    el.className = "job";
+    const pct = Math.round(job.progress || 0);
+    el.innerHTML = `
+      <div class="job-top">
+        <div class="name" title="${escAttr(job.path || job.url)}">${esc(basename(job.path) || job.id)}</div>
+        <span class="badge ${escAttr(job.status)}">${esc(job.status)}</span>
+      </div>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+      <div class="meta"><span>${pct}%</span><span class="show"></span></div>
+      ${job.error ? `<div class="err">${esc(job.error)}</div>` : ""}
+    `;
+    if (job.status === "done" && job.path) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = t("panelShow", "Show");
+      btn.addEventListener("click", () => api.showInFolder?.(job.path));
+      el.querySelector(".show").appendChild(btn);
+    }
+    listEl.appendChild(el);
+  }
 }
 
 api.onEvent((msg) => {
@@ -198,3 +258,5 @@ api.onEvent((msg) => {
 });
 
 applyI18n();
+loadJobs();
+setInterval(loadJobs, 1000);

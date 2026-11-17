@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld("vidsniffBrowser", {
   download: (payload) => ipcRenderer.invoke("browser:download", payload),
   job: (id) => ipcRenderer.invoke("browser:job", id),
   clearCaptures: () => ipcRenderer.invoke("browser:clearCaptures"),
+  openFolder: () => ipcRenderer.invoke("browser:openFolder"),
+  openSettings: () => ipcRenderer.invoke("browser:openSettings"),
+  showInFolder: (p) => ipcRenderer.invoke("browser:showInFolder", p),
   onEvent: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on("browser:event", handler);
