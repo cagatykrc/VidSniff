@@ -1,6 +1,6 @@
 {
   "name": "vidsniff",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "EN: Browser video sniffer + MP4 downloader. TR: Tarayıcı video yakalayıcı + MP4 indirme.",
   "author": "Bestami",
   "license": "MIT",
@@ -71,5 +71,9 @@
         "repo": "VidSniff"
       }
     ]
+  },
+  "allowScripts": {
+    "electron@37.10.3": true,
+    "electron-winstaller@5.4.0": true
   }
 }

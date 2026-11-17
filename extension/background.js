@@ -223,6 +223,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
+    if (msg?.type === "PANEL_REOPEN") {
+      const tabId = sender.tab?.id;
+      if (tabId != null) {
+        panelClosedTabs.delete(tabId);
+        schedulePanelElect(tabId);
+      }
+      sendResponse({ ok: true });
+      return;
+    }
+
     if (msg?.type === "CLEAR") {
       if (msg.tabId != null) {
         for (const [k, v] of [...items.entries()]) {
@@ -334,10 +344,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   updateBadge();
 });
 
-// Yeni filme / URL'ye geçince paneli tekrar açılabilir yap
+// Yeni filme / URL'ye geçince paneli tekrar açılabilir yap + eski imzalı URL'leri at
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === "loading" && info.url) {
     clearPanelState(tabId);
+    for (const [k, v] of [...items.entries()]) {
+      if (v.tabId === tabId) items.delete(k);
+    }
+    persist();
+    updateBadge();
   }
   if (info.status === "complete") {
     // içerik scriptleri aday bildirsin diye biraz bekle
@@ -387,10 +402,17 @@ async function electPanel(tabId) {
     hideAllPanels(tabId);
     return;
   }
-  const leader = panelLeaders.get(tabId);
-  if (!leader || leader.area < 160 * 90) {
-    hideAllPanels(tabId);
-    return;
+  let leader = panelLeaders.get(tabId);
+  if (!leader || leader.area < 120 * 70) {
+    // Player henüz küçük olsa bile bu sekmede yakalanmış medya varsa top frame'de göster
+    const hasMedia = [...items.values()].some((i) => i.tabId === tabId && !isNoiseItem(i));
+    if (hasMedia) {
+      leader = { frameId: 0, area: 120 * 70, ts: Date.now() };
+      panelLeaders.set(tabId, leader);
+    } else {
+      hideAllPanels(tabId);
+      return;
+    }
   }
   try {
     const frames = await chrome.webNavigation?.getAllFrames?.({ tabId }).catch(() => null);
@@ -404,7 +426,6 @@ async function electPanel(tabId) {
     }
   } catch {
     chrome.tabs.sendMessage(tabId, { type: "PANEL_SHOW" }, { frameId: leader.frameId }).catch(() => {});
-    chrome.tabs.sendMessage(tabId, { type: "PANEL_HIDE" }).catch(() => {});
   }
 }
 
@@ -453,6 +474,7 @@ async function upsertItem(partial) {
   await persist();
   updateBadge();
   notifyPrimary(next.tabId);
+  if (next.tabId >= 0) schedulePanelElect(next.tabId);
 }
 
 function notifyPrimary(tabId) {

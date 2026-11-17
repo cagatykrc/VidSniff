@@ -357,23 +357,27 @@
       return;
     }
     const { video } = largestVideo();
-    if (!video) {
-      return;
-    }
     const p = ensurePanel();
     // Video parent yerine documentElement + fixed → YouTube overlay altında kalmaz
     if (p.parentElement !== document.documentElement) {
       document.documentElement.appendChild(p);
     }
-    const rect = video.getBoundingClientRect();
-    const top = Math.min(Math.max(8, rect.top + 10), Math.max(8, window.innerHeight - 52));
-    const left = Math.min(
-      Math.max(8, rect.right - 128),
-      Math.max(8, window.innerWidth - 140)
-    );
-    p.style.top = `${Math.round(top)}px`;
-    p.style.left = `${Math.round(left)}px`;
-    p.style.right = "auto";
+    if (video) {
+      const rect = video.getBoundingClientRect();
+      const top = Math.min(Math.max(8, rect.top + 10), Math.max(8, window.innerHeight - 52));
+      const left = Math.min(
+        Math.max(8, rect.right - 128),
+        Math.max(8, window.innerWidth - 140)
+      );
+      p.style.top = `${Math.round(top)}px`;
+      p.style.left = `${Math.round(left)}px`;
+      p.style.right = "auto";
+    } else {
+      // Video henüz yok / iframe: sağ üst fallback
+      p.style.top = "12px";
+      p.style.right = "12px";
+      p.style.left = "auto";
+    }
     syncMenuVisibility();
     updatePanelLabel();
   }
@@ -476,6 +480,8 @@
   window.addEventListener("popstate", onNavigate);
   window.addEventListener("hashchange", onNavigate);
 
+  // F5 / hard reload: sessionStorage'daki X kapatmayı unut (aynı filmde buton gelsin)
+  setClosed(false);
   collect();
   globalThis.VidSniffI18n?.syncFromService?.().then(() => updatePanelLabel());
 
@@ -490,7 +496,16 @@
     attributeFilter: ["src"],
   });
 
-  document.addEventListener("play", () => collect(), true);
+  document.addEventListener(
+    "play",
+    () => {
+      // X ile kapatılmış olsa bile oynatınca tekrar aç
+      setClosed(false);
+      chrome.runtime.sendMessage({ type: "PANEL_REOPEN" }).catch(() => {});
+      collect();
+    },
+    true
+  );
 
   window.clearInterval(pollTimer);
   pollTimer = window.setInterval(() => {
