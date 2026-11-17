@@ -21,7 +21,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PARTITION = "persist:vidsniff-browser";
 const CHROME_H = 56;
-const DOCK_H = 128;
+const JOBS_PANEL_W = 372;
+let jobsPanelOpen = false;
 const DOWNLOADER = "http://127.0.0.1:17890";
 const CHROME_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -160,14 +161,15 @@ function layoutView() {
   if (!win || win.isDestroyed() || !view) return;
   const [w, h] = win.getContentSize();
   const top = CHROME_H;
-  const bottom = DOCK_H;
+  // Açık indirme paneli BrowserView altında kalmasın diye sağda boşluk bırak
+  const rightGap = jobsPanelOpen ? JOBS_PANEL_W : 0;
   view.setBounds({
     x: 0,
     y: top,
-    width: w,
-    height: Math.max(0, h - top - bottom),
+    width: Math.max(0, w - rightGap),
+    height: Math.max(0, h - top),
   });
-  view.setAutoResize({ width: true, height: false });
+  view.setAutoResize({ width: true, height: true });
 }
 
 function sendToolbar(payload) {
@@ -471,6 +473,11 @@ function ensureIpc(opts) {
   });
   ipcMain.handle("browser:showInFolder", (_e, filePath) => {
     if (filePath) opts.showInFolder?.(filePath);
+    return true;
+  });
+  ipcMain.handle("browser:setJobsOpen", (_e, open) => {
+    jobsPanelOpen = !!open;
+    layoutView();
     return true;
   });
 }

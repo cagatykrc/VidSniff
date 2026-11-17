@@ -23,10 +23,27 @@ export async function verifyUrl(url, headers = {}) {
   throw new Error(`HTTP ${code} — bağlantı reddedildi (çerez/Referer veya süresi dolmuş URL)`);
 }
 
-export async function downloadFile(url, outPath, { headers = {}, onProgress, connections = 4 } = {}) {
+export async function downloadFile(
+  url,
+  outPath,
+  { headers = {}, onProgress, connections = 4, isAborted } = {}
+) {
+  const checkAbort = () => {
+    if (isAborted?.()) {
+      const err = new Error("cancelled");
+      err.code = "ABORTED";
+      throw err;
+    }
+  };
+  checkAbort();
   let length = 0;
   let acceptsRanges = false;
   let finalUrl = url;
+
+  const progress = (p) => {
+    checkAbort();
+    onProgress?.(p);
+  };
 
   try {
     const head = await request(url, { method: "HEAD", headers });
@@ -38,13 +55,15 @@ export async function downloadFile(url, outPath, { headers = {}, onProgress, con
     } else {
       head.resume?.();
     }
-  } catch {
+  } catch (e) {
+    if (e?.code === "ABORTED") throw e;
     /* HEAD desteklemeyen sunucular */
   }
 
   // HEAD başarısız / uzunluk yoksa tek bağlantı GET
   if (!acceptsRanges || !length || connections <= 1 || length < 2 * 1024 * 1024) {
-    await single(finalUrl, outPath, headers, length, onProgress);
+    await single(finalUrl, outPath, headers, length, progress);
+    checkAbort();
     return outPath;
   }
 
@@ -62,8 +81,9 @@ export async function downloadFile(url, outPath, { headers = {}, onProgress, con
         const tmp = `${outPath}.part${i}`;
         tmpFiles.push({ i, tmp });
         await rangeDownload(finalUrl, tmp, start, end, headers, (n) => {
+          checkAbort();
           done += n;
-          onProgress?.(Math.round((done / length) * 100));
+          progress(Math.round((done / length) * 100));
         });
       })
     );

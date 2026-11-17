@@ -84,7 +84,41 @@ export function getJobs() {
   return [...jobs.values()].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
 }
 
+export function cancelJob(id) {
+  const job = jobs.get(id);
+  if (!job) return { ok: false, error: "job yok" };
+  job.abort = true;
+  if (job.status === "running") {
+    job.status = "cancelled";
+    job.error = "Durduruldu";
+    job.finishedAt = Date.now();
+  }
+  return { ok: true, job };
+}
+
+export function removeJob(id) {
+  const job = jobs.get(id);
+  if (!job) return { ok: false, error: "job yok" };
+  if (job.status === "running") {
+    job.abort = true;
+    job.status = "cancelled";
+    job.finishedAt = Date.now();
+  }
+  jobs.delete(id);
+  // yarım dosyayı temizle
+  if (job.path) {
+    fsp.unlink(job.path).catch(() => {});
+    fsp.unlink(`${job.path}.part`).catch(() => {});
+    fsp.unlink(job.path.replace(/\.mp4$/i, ".video.ts")).catch(() => {});
+    fsp.unlink(job.path.replace(/\.mp4$/i, ".audio.ts")).catch(() => {});
+  }
+  return { ok: true };
+}
+
 export function clearJobs() {
+  for (const job of jobs.values()) {
+    if (job.status === "running") job.abort = true;
+  }
   jobs.clear();
   return { ok: true, cleared: true };
 }
@@ -167,6 +201,20 @@ export async function startDownloader({ port = PORT, downloadDir, prefs, prefsPa
       if (req.method === "POST" && url.pathname === "/jobs/clear") {
         clearJobs();
         return json(res, 200, { ok: true });
+      }
+
+      if (req.method === "POST" && url.pathname.startsWith("/jobs/") && url.pathname.endsWith("/cancel")) {
+        const id = url.pathname.slice("/jobs/".length, -"/cancel".length);
+        const result = cancelJob(id);
+        if (!result.ok) return json(res, 404, result);
+        return json(res, 200, result);
+      }
+
+      if (req.method === "DELETE" && url.pathname.startsWith("/jobs/")) {
+        const id = url.pathname.slice("/jobs/".length);
+        const result = removeJob(id);
+        if (!result.ok) return json(res, 404, result);
+        return json(res, 200, result);
       }
 
       if (req.method === "GET" && url.pathname.startsWith("/jobs/")) {
@@ -287,8 +335,14 @@ export async function stopDownloader() {
 }
 
 async function runJob(job, headers) {
+  const isAborted = () => !!job.abort;
   try {
     const onProgress = (p) => {
+      if (isAborted()) {
+        const err = new Error("cancelled");
+        err.code = "ABORTED";
+        throw err;
+      }
       job.progress = Math.max(0, Math.min(100, Number(p) || 0));
     };
 
@@ -298,10 +352,25 @@ async function runJob(job, headers) {
         onProgress,
         quality: job.quality || "auto",
         audioUrls: job.audioUrls || [],
+        isAborted,
       });
+      if (isAborted()) throw Object.assign(new Error("cancelled"), { code: "ABORTED" });
       job.path = finalPath;
     } else {
-      await downloadFile(job.url, job.path, { headers, onProgress, connections: 6 });
+      await downloadFile(job.url, job.path, {
+        headers,
+        onProgress,
+        connections: 6,
+        isAborted,
+      });
+      if (isAborted()) throw Object.assign(new Error("cancelled"), { code: "ABORTED" });
+    }
+
+    if (isAborted()) {
+      job.status = "cancelled";
+      job.error = "Durduruldu";
+      job.finishedAt = Date.now();
+      return;
     }
 
     job.status = "done";
@@ -317,6 +386,17 @@ async function runJob(job, headers) {
     }
     console.log(`[done] ${job.path}`);
   } catch (e) {
+    if (job.abort || e?.code === "ABORTED" || /cancelled/i.test(e?.message || "")) {
+      job.status = "cancelled";
+      job.error = "Durduruldu";
+      job.finishedAt = Date.now();
+      try {
+        if (job.path && fs.existsSync(job.path)) await fsp.unlink(job.path);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     job.status = "error";
     job.error = e?.message || String(e);
     job.finishedAt = Date.now();

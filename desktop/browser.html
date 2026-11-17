@@ -18,6 +18,9 @@
       </form>
       <select id="quality" hidden></select>
       <button type="button" id="download" class="primary" disabled>MP4</button>
+      <button type="button" id="jobsToggle" class="ghost jobs-btn" title="Downloads">
+        ↓ <span id="jobsBadge" class="badge-count" hidden>0</span>
+      </button>
       <button type="button" id="openFolder" class="ghost" title="Folder">📁</button>
       <button type="button" id="openSettings" class="ghost" title="Settings">⚙</button>
     </div>
@@ -28,11 +31,12 @@
     </div>
   </div>
 
-  <div class="jobs-dock">
+  <div id="jobsPanel" class="jobs-panel" hidden>
     <div class="jobs-head">
       <span data-i18n="browserJobs">Downloads</span>
       <div class="jobs-actions">
         <button type="button" id="clearList" class="ghost mini" data-i18n="panelClear">Clear</button>
+        <button type="button" id="jobsClose" class="ghost mini">✕</button>
       </div>
     </div>
     <div id="list" class="jobs-list">

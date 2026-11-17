@@ -19,6 +19,8 @@ const capTitle = document.getElementById("capTitle");
 const capMeta = document.getElementById("capMeta");
 const statusEl = document.getElementById("status");
 const listEl = document.getElementById("list");
+const jobsPanel = document.getElementById("jobsPanel");
+const jobsBadge = document.getElementById("jobsBadge");
 
 function t(key, fallback = "") {
   return S[key] || fallback || key;
@@ -43,6 +45,11 @@ function applyI18n() {
   }
 }
 
+function setJobsOpen(open) {
+  jobsPanel.hidden = !open;
+  api.setJobsOpen?.(!!open);
+}
+
 document.getElementById("urlForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   await api.navigate(urlInput.value);
@@ -57,6 +64,10 @@ reloadBtn.addEventListener("click", () => {
 dlBtn.addEventListener("click", () => startDownload());
 document.getElementById("openFolder")?.addEventListener("click", () => api.openFolder?.());
 document.getElementById("openSettings")?.addEventListener("click", () => api.openSettings?.());
+document.getElementById("jobsToggle")?.addEventListener("click", () => {
+  setJobsOpen(jobsPanel.hidden);
+});
+document.getElementById("jobsClose")?.addEventListener("click", () => setJobsOpen(false));
 document.getElementById("clearList")?.addEventListener("click", async () => {
   try {
     await fetch(`${API}/jobs/clear`, { method: "POST" });
@@ -64,6 +75,10 @@ document.getElementById("clearList")?.addEventListener("click", async () => {
     /* ignore */
   }
   await loadJobs();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setJobsOpen(false);
 });
 
 function setStatus(text, cls = "") {
@@ -156,6 +171,7 @@ async function startDownload() {
       return;
     }
     setStatus(t("browserDownloading", "Downloading…"), "run");
+    setJobsOpen(true);
     await loadJobs();
     if (result.jobId) watchJob(result.jobId);
     else setStatus(t("browserStarted", "Started"), "ok");
@@ -177,11 +193,32 @@ async function watchJob(jobId) {
     } else if (job.status === "done") {
       setStatus(t("browserDone", "Saved"), "ok");
       return;
+    } else if (job.status === "cancelled") {
+      setStatus(t("browserCancelled", "Stopped"), "err");
+      return;
     } else if (job.status === "error") {
       setStatus(job.error || t("browserFailed", "Failed"), "err");
       return;
     }
   }
+}
+
+async function cancelJob(id) {
+  try {
+    await fetch(`${API}/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  } catch {
+    /* ignore */
+  }
+  await loadJobs();
+}
+
+async function removeJob(id) {
+  try {
+    await fetch(`${API}/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch {
+    /* ignore */
+  }
+  await loadJobs();
 }
 
 function basename(p) {
@@ -207,31 +244,66 @@ async function loadJobs() {
   } catch {
     jobs = [];
   }
+
+  const running = jobs.filter((j) => j.status === "running").length;
+  if (running > 0) {
+    jobsBadge.hidden = false;
+    jobsBadge.textContent = String(running);
+  } else {
+    jobsBadge.hidden = true;
+  }
+
   if (!jobs.length) {
     listEl.innerHTML = `<div class="empty" id="jobsEmpty">${t("panelEmptyShort", "No downloads yet")}</div>`;
     return;
   }
   listEl.innerHTML = "";
-  for (const job of jobs.slice(0, 12)) {
+  for (const job of jobs.slice(0, 20)) {
     const el = document.createElement("article");
     el.className = "job";
     const pct = Math.round(job.progress || 0);
+    const statusLabel =
+      job.status === "running"
+        ? t("browserStatusRunning", "running")
+        : job.status === "done"
+          ? t("browserStatusDone", "done")
+          : job.status === "cancelled"
+            ? t("browserStatusCancelled", "stopped")
+            : t("browserStatusError", "error");
     el.innerHTML = `
       <div class="job-top">
         <div class="name" title="${escAttr(job.path || job.url)}">${esc(basename(job.path) || job.id)}</div>
-        <span class="badge ${escAttr(job.status)}">${esc(job.status)}</span>
+        <span class="badge ${escAttr(job.status)}">${esc(statusLabel)}</span>
       </div>
       <div class="bar"><span style="width:${pct}%"></span></div>
-      <div class="meta"><span>${pct}%</span><span class="show"></span></div>
+      <div class="meta">
+        <span>${pct}%</span>
+        <span class="acts"></span>
+      </div>
       ${job.error ? `<div class="err">${esc(job.error)}</div>` : ""}
     `;
-    if (job.status === "done" && job.path) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = t("panelShow", "Show");
-      btn.addEventListener("click", () => api.showInFolder?.(job.path));
-      el.querySelector(".show").appendChild(btn);
+    const acts = el.querySelector(".acts");
+    if (job.status === "running") {
+      const stop = document.createElement("button");
+      stop.type = "button";
+      stop.className = "danger";
+      stop.textContent = t("browserStop", "Stop");
+      stop.addEventListener("click", () => cancelJob(job.id));
+      acts.appendChild(stop);
     }
+    if (job.status === "done" && job.path) {
+      const show = document.createElement("button");
+      show.type = "button";
+      show.textContent = t("panelShow", "Show");
+      show.addEventListener("click", () => api.showInFolder?.(job.path));
+      acts.appendChild(show);
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = t("browserRemove", "Close");
+    close.title = t("browserRemoveHint", "Remove from list");
+    close.addEventListener("click", () => removeJob(job.id));
+    acts.appendChild(close);
     listEl.appendChild(el);
   }
 }

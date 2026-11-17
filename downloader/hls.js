@@ -86,8 +86,16 @@ export async function probeHls(masterUrl, { headers = {} } = {}) {
 export async function downloadHls(
   masterUrl,
   outPath,
-  { headers = {}, onProgress, quality = "auto", audio = "auto", audioUrls = [] } = {}
+  { headers = {}, onProgress, quality = "auto", audio = "auto", audioUrls = [], isAborted } = {}
 ) {
+  const checkAbort = () => {
+    if (isAborted?.()) {
+      const err = new Error("cancelled");
+      err.code = "ABORTED";
+      throw err;
+    }
+  };
+  checkAbort();
   const hdrs = normalizeHeaders(headers);
   const masterText = await fetchText(masterUrl, hdrs);
   if (!isPlaylist(masterText)) {
@@ -118,18 +126,31 @@ export async function downloadHls(
   const audioPart = `${base}.audio.ts`;
   const muxedMp4 = `${base}.mp4`;
 
-  await downloadMediaPlaylist(videoPlaylistUrl, videoPart, hdrs, (p) => {
-    onProgress?.(audioCandidates.length ? Math.round(p * 0.65) : Math.round(p * 0.9));
-  });
+  await downloadMediaPlaylist(
+    videoPlaylistUrl,
+    videoPart,
+    hdrs,
+    (p) => {
+      onProgress?.(audioCandidates.length ? Math.round(p * 0.65) : Math.round(p * 0.9));
+    },
+    isAborted
+  );
 
   let audioOk = false;
   let lastAudioErr = null;
   for (const aUrl of audioCandidates) {
+    checkAbort();
     try {
       console.log("[hls] ses deneniyor:", aUrl);
-      await downloadMediaPlaylist(aUrl, audioPart, hdrs, (p) => {
-        onProgress?.(65 + Math.round(p * 0.2));
-      });
+      await downloadMediaPlaylist(
+        aUrl,
+        audioPart,
+        hdrs,
+        (p) => {
+          onProgress?.(65 + Math.round(p * 0.2));
+        },
+        isAborted
+      );
       const st = fs.statSync(audioPart);
       if (st.size > 50_000) {
         audioOk = true;
@@ -218,7 +239,15 @@ function siblingUrl(masterUrl, filename) {
   }
 }
 
-async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress) {
+async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress, isAborted) {
+  const checkAbort = () => {
+    if (isAborted?.()) {
+      const err = new Error("cancelled");
+      err.code = "ABORTED";
+      throw err;
+    }
+  };
+  checkAbort();
   const text = await fetchText(playlistUrl, headers);
   if (!isPlaylist(text)) throw new Error(`Media playlist değil: ${playlistUrl.slice(0, 100)}`);
   if (/METHOD=SAMPLE-AES/i.test(text)) {
@@ -237,6 +266,7 @@ async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress) 
     });
 
   if (initSegment) {
+    checkAbort();
     await writeBuf(await fetchBufferRetry(initSegment.url, headers));
   }
 
@@ -262,6 +292,7 @@ async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress) 
 
   async function worker() {
     while (true) {
+      checkAbort();
       const i = cursor;
       cursor += 1;
       if (i >= segments.length) return;
@@ -279,8 +310,14 @@ async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress) 
     }
   }
 
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
-  await flushWrites();
+  try {
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    await flushWrites();
+  } catch (e) {
+    out.destroy();
+    await fsp.unlink(tmp).catch(() => {});
+    throw e;
+  }
 
   await new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve())));
   await fsp.rename(tmp, outFile).catch(async () => {
