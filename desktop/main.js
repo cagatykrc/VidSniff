@@ -24,6 +24,7 @@ import {
 } from "../downloader/server.js";
 import { STRINGS, normalizeLang, t } from "./i18n.js";
 import { checkLatestRelease, downloadAndInstall } from "./updater.js";
+import { showBrowser, pushBrowserI18n } from "./browser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -74,9 +75,10 @@ async function savePrefs() {
 }
 
 function broadcastLang() {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send("lang:changed", prefs.lang);
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send("lang:changed", prefs.lang);
   }
+  pushBrowserI18n(STRINGS[prefs.lang] || STRINGS.en, prefs.lang);
   rebuildTrayMenu();
   refreshTrayTitle();
 }
@@ -234,13 +236,18 @@ async function main() {
     showSettings();
     return true;
   });
+  ipcMain.handle("ui:openBrowser", () => {
+    openBrowser();
+    return true;
+  });
   ipcMain.handle("update:check", async (_e, opts = {}) => {
     return runUpdateCheck({ silent: !!opts.silent, manual: true });
   });
 
   const flag = path.join(DATA_DIR, "setup-done");
   if (!fs.existsSync(flag)) {
-    showSetup();
+    openBrowser();
+    showPanel();
     await fsp.writeFile(flag, new Date().toISOString(), "utf8");
   } else {
     showPanel();
@@ -451,6 +458,7 @@ function rebuildTrayMenu() {
   const L = prefs.lang;
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      { label: t(L, "trayBrowser"), click: () => openBrowser() },
       { label: t(L, "trayPanel"), click: () => showPanel() },
       { label: t(L, "traySetup"), click: () => showSetup() },
       { label: t(L, "traySettings"), click: () => showSettings() },
@@ -479,6 +487,14 @@ function rebuildTrayMenu() {
       },
     ])
   );
+}
+
+function openBrowser() {
+  showBrowser({
+    icon: ICON,
+    getLang: () => prefs.lang,
+    getStrings: () => STRINGS[prefs.lang] || STRINGS.en,
+  });
 }
 
 function refreshTrayTitle() {
@@ -574,7 +590,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => showPanel());
+  app.on("second-instance", () => {
+    openBrowser();
+    showPanel();
+  });
   app.whenReady().then(main).catch(async (e) => {
     console.error(e);
     try {

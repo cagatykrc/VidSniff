@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VidSniff</title>
+  <link rel="stylesheet" href="browser.css" />
+</head>
+<body>
+  <div class="chrome">
+    <div class="nav">
+      <button type="button" id="back" class="icon" title="Back" disabled>←</button>
+      <button type="button" id="forward" class="icon" title="Forward" disabled>→</button>
+      <button type="button" id="reload" class="icon" title="Reload">↻</button>
+      <form id="urlForm" class="url-wrap">
+        <input id="url" type="text" spellcheck="false" autocomplete="off"
+          placeholder="https://…" />
+        <button type="submit" id="go" class="go">Go</button>
+      </form>
+    </div>
+    <div class="capture">
+      <div class="cap-left">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="cap-text">
+          <div id="capTitle" class="cap-title">—</div>
+          <div id="capMeta" class="cap-meta">Play a video on the page to capture it</div>
+        </div>
+      </div>
+      <div class="cap-actions">
+        <select id="quality" hidden></select>
+        <button type="button" id="download" class="primary" disabled>Download MP4</button>
+      </div>
+    </div>
+    <div id="status" class="status" hidden></div>
+  </div>
+  <script src="browser-ui.js"></script>
+</body>
+</html>

@@ -7,6 +7,9 @@ let S = {};
 document.getElementById("openDir").addEventListener("click", () => {
   window.vidsniff?.openDownloads?.();
 });
+document.getElementById("openBrowser")?.addEventListener("click", () => {
+  window.vidsniff?.openBrowser?.();
+});
 document.getElementById("openSetup")?.addEventListener("click", () => {
   window.vidsniff?.openSetup?.();
 });

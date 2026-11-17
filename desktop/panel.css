@@ -62,6 +62,11 @@ button:hover { border-color: #46506a; }
   color: var(--muted);
   font-size: 12px;
 }
+.install-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
 .install-bar button.primary {
   background: linear-gradient(180deg, #ff7a2f, #e85d04);
   border-color: #c2410c;

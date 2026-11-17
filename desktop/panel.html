@@ -23,8 +23,11 @@
   </header>
 
   <div class="install-bar">
-    <span data-i18n="panelInstallHint">Videos won’t be caught without the extension.</span>
-    <button id="openSetup" type="button" class="primary" data-i18n="panelInstallBtn">Install extension</button>
+    <span data-i18n="panelBrowserHint">Open the built-in browser, play a video, then download.</span>
+    <div class="install-actions">
+      <button id="openBrowser" type="button" class="primary" data-i18n="panelBrowserBtn">Open browser</button>
+      <button id="openSetup" type="button" class="ghost" data-i18n="panelInstallBtn">Extension (optional)</button>
+    </div>
   </div>
 
   <main id="list" class="list">

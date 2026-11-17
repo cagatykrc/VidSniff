@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("vidsniff", {
   showInFolder: (filePath) => ipcRenderer.invoke("shell:show", filePath),
   openSetup: () => ipcRenderer.invoke("ui:openSetup"),
   openSettings: () => ipcRenderer.invoke("ui:openSettings"),
+  openBrowser: () => ipcRenderer.invoke("ui:openBrowser"),
   getI18n: () => ipcRenderer.invoke("i18n:get"),
   onLangChanged: (cb) => {
     const handler = (_e, lang) => cb(lang);
