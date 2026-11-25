@@ -109,6 +109,8 @@ export function removeJob(id) {
   if (job.path) {
     fsp.unlink(job.path).catch(() => {});
     fsp.unlink(`${job.path}.part`).catch(() => {});
+    fsp.unlink(job.path.replace(/\.mp4$/i, ".video.bin")).catch(() => {});
+    fsp.unlink(job.path.replace(/\.mp4$/i, ".audio.bin")).catch(() => {});
     fsp.unlink(job.path.replace(/\.mp4$/i, ".video.ts")).catch(() => {});
     fsp.unlink(job.path.replace(/\.mp4$/i, ".audio.ts")).catch(() => {});
   }

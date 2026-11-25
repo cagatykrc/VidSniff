@@ -5,6 +5,11 @@ import https from "node:https";
 import http from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 const DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -121,12 +126,12 @@ export async function downloadHls(
     audioUrls,
   });
 
-  const base = outPath.replace(/\.(ts|mp4|m3u8|part)$/i, "");
-  const videoPart = `${base}.video.ts`;
-  const audioPart = `${base}.audio.ts`;
+  const base = mediaStem(outPath);
+  const videoPart = `${base}.video.bin`;
+  const audioPart = `${base}.audio.bin`;
   const muxedMp4 = `${base}.mp4`;
 
-  await downloadMediaPlaylist(
+  const videoMeta = await downloadMediaPlaylist(
     videoPlaylistUrl,
     videoPart,
     hdrs,
@@ -137,12 +142,13 @@ export async function downloadHls(
   );
 
   let audioOk = false;
+  let audioMeta = null;
   let lastAudioErr = null;
   for (const aUrl of audioCandidates) {
     checkAbort();
     try {
       console.log("[hls] ses deneniyor:", aUrl);
-      await downloadMediaPlaylist(
+      audioMeta = await downloadMediaPlaylist(
         aUrl,
         audioPart,
         hdrs,
@@ -173,23 +179,34 @@ export async function downloadHls(
   onProgress?.(88);
 
   let finalPath = muxedMp4;
-  if (audioOk) {
-    await muxAv(videoPart, audioPart, muxedMp4);
-    await fsp.unlink(videoPart).catch(() => {});
-    await fsp.unlink(audioPart).catch(() => {});
-  } else {
-    // IDM gibi yine .mp4 üret (sessiz olsa bile)
-    try {
-      await remuxTsToMp4(videoPart, muxedMp4);
-      await fsp.unlink(videoPart).catch(() => {});
-    } catch {
-      const fallback = `${base}.ts`;
-      await fsp.rename(videoPart, fallback).catch(async () => {
-        await fsp.copyFile(videoPart, fallback);
+  try {
+    if (audioOk) {
+      await muxAv(videoPart, audioPart, muxedMp4, {
+        videoFmp4: !!videoMeta?.isFmp4,
+        audioFmp4: !!audioMeta?.isFmp4,
+      });
+    } else if (videoMeta?.isFmp4) {
+      // fMP4 parçaları zaten MP4 — doğrudan kaydet
+      await fsp.rename(videoPart, muxedMp4).catch(async () => {
+        await fsp.copyFile(videoPart, muxedMp4);
         await fsp.unlink(videoPart).catch(() => {});
       });
-      finalPath = fallback;
+    } else {
+      await remuxTsToMp4(videoPart, muxedMp4);
     }
+    await fsp.unlink(videoPart).catch(() => {});
+    await fsp.unlink(audioPart).catch(() => {});
+  } catch (e) {
+    console.warn("[hls] mp4 dönüşümü başarısız, ts/bin bırakılacak:", e?.message || e);
+    // Son çare: uzantıyı .mp4 yap (birçok oynatıcı TS/fMP4'ü yine açar) — .mp4.ts üretme
+    try {
+      await fsp.rename(videoPart, muxedMp4);
+    } catch {
+      await fsp.copyFile(videoPart, muxedMp4).catch(() => {});
+      await fsp.unlink(videoPart).catch(() => {});
+    }
+    await fsp.unlink(audioPart).catch(() => {});
+    finalPath = muxedMp4;
   }
 
   onProgress?.(100);
@@ -197,6 +214,14 @@ export async function downloadHls(
     console.warn("[hls] uyarı: ses birleştirilemedi →", finalPath);
   }
   return finalPath;
+}
+
+/** film.mp4 / film.video.bin / film.mp4.ts → film */
+function mediaStem(filePath) {
+  let p = String(filePath || "video");
+  p = p.replace(/\.(video|audio)\.(ts|bin|mp4|m4s)$/i, "");
+  p = p.replace(/\.(ts|mp4|m3u8|m4a|mkv|webm|part|bin)$/i, "");
+  return p || "video";
 }
 
 export async function remuxFiles(videoPath, audioPath, outPath) {
@@ -324,6 +349,7 @@ async function downloadMediaPlaylist(playlistUrl, outFile, headers, onProgress, 
     await fsp.copyFile(tmp, outFile);
     await fsp.unlink(tmp);
   });
+  return { isFmp4: !!initSegment, segments: segments.length };
 }
 
 function parseAudioRenditions(text, baseUrl) {
@@ -410,24 +436,28 @@ function pickAudio(audios, groupId, preference = "auto") {
   return pool.find((a) => a.default) || pool.find((a) => a.autoselect) || pool[0];
 }
 
-async function muxAv(videoPath, audioPath, outPath) {
+async function muxAv(videoPath, audioPath, outPath, { videoFmp4 = false, audioFmp4 = false } = {}) {
   const ffmpeg = await findFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg yok");
-  await runCmd(ffmpeg, [
-    "-y",
-    "-i",
-    videoPath,
+  const args = ["-y"];
+  if (!videoFmp4) args.push("-f", "mpegts");
+  args.push("-i", videoPath);
+  if (!audioFmp4) args.push("-f", "mpegts");
+  args.push(
     "-i",
     audioPath,
     "-map",
     "0:v:0",
     "-map",
-    "1:a:0",
+    "1:a:0?",
     "-c",
     "copy",
     "-shortest",
-    outPath,
-  ]);
+    "-movflags",
+    "+faststart",
+    outPath
+  );
+  await runCmd(ffmpeg, args);
   if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 1000) {
     throw new Error("mux çıktısı boş");
   }
@@ -436,14 +466,44 @@ async function muxAv(videoPath, audioPath, outPath) {
 async function remuxTsToMp4(tsPath, outPath) {
   const ffmpeg = await findFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg yok");
-  await runCmd(ffmpeg, ["-y", "-i", tsPath, "-c", "copy", "-bsf:a", "aac_adtstoasc", outPath]);
+  try {
+    await runCmd(ffmpeg, [
+      "-y",
+      "-f",
+      "mpegts",
+      "-i",
+      tsPath,
+      "-c",
+      "copy",
+      "-bsf:a",
+      "aac_adtstoasc",
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+  } catch {
+    await runCmd(ffmpeg, [
+      "-y",
+      "-f",
+      "mpegts",
+      "-i",
+      tsPath,
+      "-c",
+      "copy",
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+  }
   if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 1000) {
-    // audio bitstream filter fail → without bsf
-    await runCmd(ffmpeg, ["-y", "-i", tsPath, "-c", "copy", outPath]);
+    throw new Error("remux çıktısı boş");
   }
 }
 
-function findFfmpeg() {
+async function findFfmpeg() {
+  const bundled = resolveBundledFfmpeg();
+  if (bundled) return bundled;
+
   return new Promise((resolve) => {
     const candidates = ["ffmpeg", "ffmpeg.exe"];
     let i = 0;
@@ -460,6 +520,33 @@ function findFfmpeg() {
     };
     tryNext();
   });
+}
+
+function resolveBundledFfmpeg() {
+  const list = [];
+  if (process.resourcesPath) {
+    list.push(path.join(process.resourcesPath, "ffmpeg.exe"));
+    list.push(path.join(process.resourcesPath, "ffmpeg"));
+  }
+  try {
+    let p = require("ffmpeg-static");
+    if (typeof p === "string") {
+      if (p.includes("app.asar")) p = p.replace("app.asar", "app.asar.unpacked");
+      list.unshift(p);
+    }
+  } catch {
+    /* ignore */
+  }
+  list.push(path.join(__dirname, "..", "node_modules", "ffmpeg-static", "ffmpeg.exe"));
+  list.push(path.join(__dirname, "..", "node_modules", "ffmpeg-static", "ffmpeg"));
+  for (const p of list) {
+    try {
+      if (p && fs.existsSync(p)) return p;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 }
 
 function resolveFfmpegInDir(root) {
